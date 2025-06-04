@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Triathlon Race Replay</title>
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+  <style>
+    body { font: 16px/1.4 sans-serif; margin: 10px; }
+    h1 { font-size: 1.25em; }
+    #inputs .athlete-input { margin: 0.5em 0; }
+    #map { width: 100%; height: 600px; margin: 1em 0; background: #eee; }
+    #controls { margin: 0.5em 0; }
+    #controls button, #controls input[type=range] { vertical-align: middle; }
+    #timeDisplay { margin-left: 0.5em; font-family: monospace; }
+  </style>
+</head>
+<body>
+
+<h1>Triathlon Race Replay</h1>
+<p>Upload each athlete's GPX files (Swim, Bike, Run):</p>
+<div id="inputs">
+  <div class="athlete-input"><strong>Athlete 1:</strong>
+    Swim <input type="file" id="athlete1_swim" accept=".gpx" /> 
+    Bike <input type="file" id="athlete1_bike" accept=".gpx" /> 
+    Run <input type="file" id="athlete1_run" accept=".gpx" />
+  </div>
+  <div class="athlete-input"><strong>Athlete 2:</strong>
+    Swim <input type="file" id="athlete2_swim" accept=".gpx" /> 
+    Bike <input type="file" id="athlete2_bike" accept=".gpx" /> 
+    Run <input type="file" id="athlete2_run" accept=".gpx" />
+  </div>
+  <div class="athlete-input"><strong>Athlete 3:</strong>
+    Swim <input type="file" id="athlete3_swim" accept=".gpx" /> 
+    Bike <input type="file" id="athlete3_bike" accept=".gpx" /> 
+    Run <input type="file" id="athlete3_run" accept=".gpx" />
+  </div>
+  <div class="athlete-input"><strong>Athlete 4:</strong>
+    Swim <input type="file" id="athlete4_swim" accept=".gpx" /> 
+    Bike <input type="file" id="athlete4_bike" accept=".gpx" /> 
+    Run <input type="file" id="athlete4_run" accept=".gpx" />
+  </div>
+  <div class="athlete-input"><strong>Athlete 5:</strong>
+    Swim <input type="file" id="athlete5_swim" accept=".gpx" /> 
+    Bike <input type="file" id="athlete5_bike" accept=".gpx" /> 
+    Run <input type="file" id="athlete5_run" accept=".gpx" />
+  </div>
+</div>
+<button id="loadBtn">Load and Prepare</button>
+
+<div id="map"></div>
+
+<div id="controls">
+  <button id="playPauseBtn" disabled>Play</button>
+  <input type="range" id="timeSlider" min="0" value="0" disabled />
+  <span id="timeDisplay">0:00:00</span>
+</div>
+
+<!-- Leaflet JS -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script>
+(() => {
+  // Initialize map with OSM tiles
+  const map = L.map('map').setView([0, 0], 2);
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+  }).addTo(map);
+
+  const loadBtn = document.getElementById('loadBtn');
+  const playPauseBtn = document.getElementById('playPauseBtn');
+  const timeSlider = document.getElementById('timeSlider');
+  const timeDisplay = document.getElementById('timeDisplay');
+
+  // Color scheme for athletes 1-5:
+  const colors = ["red", "blue", "green", "orange", "purple"];
+
+  // Data structures for athletes
+  let athletes = [];      // will hold {name, color, segments, startTime, endTime, marker}
+  let globalStartTime = 0;
+  let globalEndTime = 0;
+  let playing = false;
+  let timerId = null;
+
+  // Format seconds to H:MM:SS
+  function formatTime(seconds) {
+    seconds = Math.floor(seconds);
+    const hrs = Math.floor(seconds / 3600);
+    const mins = Math.floor((seconds % 3600) / 60);
+    const secs = seconds % 60;
+    return (hrs ? hrs + ':' : '') +
+           String(hrs ? mins.toString().padStart(2, '0') : mins).padStart(1, '0') + ':' +
+           secs.toString().padStart(2, '0');
+  }
+
+  // Find interpolated position (lat,lng) within a segment for time t (relative seconds)
+  function interpolatePosition(points, t) {
+    // If t is before first point or after last point, clamp to ends
+    if (t <= points[0].t) {
+      return [points[0].lat, points[0].lng];
+    }
+    if (t >= points[points.length - 1].t) {
+      return [points[points.length - 1].lat, points[points.length - 1].lng];
+    }
+    // Binary search for surrounding points
+    let low = 0;
+    let high = points.length - 1;
+    while (high - low > 1) {
+      const mid = Math.floor((low + high) / 2);
+      if (points[mid].t === t) {
+        low = mid;
+        break;
+      }
+      if (points[mid].t < t) {
+        low = mid;
+      } else {
+        high = mid;
+      }
+    }
+    // low is now index of point <= t
+    const pt1 = points[low];
+    const pt2 = points[low + 1];
+    if (t <= pt1.t) {
+      return [pt1.lat, pt1.lng];
+    }
+    if (t >= pt2.t) {
+      return [pt2.lat, pt2.lng];
+    }
+    // Interpolate between pt1 and pt2
+    const ratio = (t - pt1.t) / (pt2.t - pt1.t);
+    const lat = pt1.lat + ratio * (pt2.lat - pt1.lat);
+    const lng = pt1.lng + ratio * (pt2.lng - pt1.lng);
+    return [lat, lng];
+  }
+
+  // Update all markers to the given time (in seconds from global start)
+  function updateMarkers(currentTime) {
+    for (let athlete of athletes) {
+      const startT = athlete.startTime;
+      const endT = athlete.endTime;
+      const marker = athlete.marker;
+      // Before athlete's start or no data: hide marker
+      if (currentTime < (startT - globalStartTime) / 1000) {
+        marker.setOpacity(0);
+        continue;
+      }
+      // After start: if marker was hidden, show it
+      if (marker.options.opacity === 0 || marker.options.opacity === 0.0) {
+        marker.setOpacity(1);
+      }
+      // If past athlete's finish, just hold at final position
+      if (currentTime >= (endT - globalStartTime) / 1000) {
+        const lastSeg = athlete.segments[athlete.segments.length - 1];
+        const lastPt = lastSeg.points[lastSeg.points.length - 1];
+        marker.setLatLng([ lastPt.lat, lastPt.lng ]);
+        continue;
+      }
+      // Determine which segment the currentTime falls in for this athlete
+      let targetLatLng = null;
+      for (let seg of athlete.segments) {
+        const segStart = (seg.startTime - globalStartTime) / 1000;
+        const segEnd = (seg.endTime - globalStartTime) / 1000;
+        if (currentTime >= segStart && currentTime <= segEnd) {
+          // Current time is within this segment
+          targetLatLng = interpolatePosition(seg.points, currentTime);
+          break;
+        } else if (currentTime < segStart) {
+          // Current time is before this segment (which means after previous finished but before next started)
+          // Hold position at end of previous segment
+          const prevSeg = seg === athlete.segments[0] ? null : athlete.segments[athlete.segments.indexOf(seg) - 1];
+          if (prevSeg) {
+            const prevLast = prevSeg.points[prevSeg.points.length - 1];
+            targetLatLng = [ prevLast.lat, prevLast.lng ];
+          } else {
+            // Should not happen (no previous segment, means first segment hasn't started yet which was handled above)
+            targetLatLng = null;
+          }
+          break;
+        }
+      }
+      if (targetLatLng) {
+        marker.setLatLng(targetLatLng);
+      }
+    }
+    // Update time display
+    timeDisplay.textContent = formatTime(currentTime);
+  }
+
+  // Handle slider input (user scrubbing)
+  timeSlider.addEventListener('input', () => {
+    if (!athletes.length) return;
+    const t = Number(timeSlider.value);
+    updateMarkers(t);
+  });
+
+  // Play/Pause button handler
+  playPauseBtn.addEventListener('click', () => {
+    if (!playing) {
+      // Start playback
+      playing = true;
+      playPauseBtn.textContent = "Pause";
+      // If at end, restart from beginning
+      if (Number(timeSlider.value) >= Number(timeSlider.max)) {
+        timeSlider.value = "0";
+        updateMarkers(0);
+      }
+      // Timer: advance simulation (e.g. 5 seconds of race time per 100ms real time => 50x speed)
+      const stepSeconds = 5;       // simulation seconds per tick
+      const intervalMs = 100;      // interval duration in ms
+      timerId = setInterval(() => {
+        let current = Number(timeSlider.value);
+        let max = Number(timeSlider.max);
+        if (current < max) {
+          let next = current + stepSeconds;
+          if (next > max) next = max;
+          timeSlider.value = String(next);
+          updateMarkers(next);
+        } else {
+          // reached end of timeline
+          clearInterval(timerId);
+          playing = false;
+          playPauseBtn.textContent = "Play";
+        }
+      }, intervalMs);
+    } else {
+      // Pause playback
+      playing = false;
+      playPauseBtn.textContent = "Play";
+      if (timerId) {
+        clearInterval(timerId);
+        timerId = null;
+      }
+    }
+  });
+
+  // Load and parse files on button click
+  loadBtn.addEventListener('click', async () => {
+    // Validate all file inputs are filled
+    const fileInputs = document.querySelectorAll('#inputs input[type=file]');
+    for (let input of fileInputs) {
+      if (!input.files.length) {
+        alert("Please select all GPX files for each athlete (15 files total).");
+        return;
+      }
+    }
+    // Reset any existing data
+    athletes = [];
+    globalStartTime = Infinity;
+    globalEndTime = 0;
+    // Remove any existing markers from map
+    // (If re-loading new files without page refresh)
+    map.eachLayer(layer => {
+      if (layer instanceof L.CircleMarker) {
+        map.removeLayer(layer);
+      }
+    });
+    // Parse GPX files for each athlete
+    const parser = new DOMParser();
+    const GPX_NS = "http://www.topografix.com/GPX/1/1";
+    try {
+      for (let i = 1; i <= 5; i++) {
+        // Read each segment file as text
+        const swimFile = document.getElementById(`athlete${i}_swim`).files[0];
+        const bikeFile = document.getElementById(`athlete${i}_bike`).files[0];
+        const runFile  = document.getElementById(`athlete${i}_run`).files[0];
+        const [swimText, bikeText, runText] = await Promise.all([
+          swimFile.text(), bikeFile.text(), runFile.text()
+        ]);
+        const athlete = { name: "Athlete " + i, color: colors[i-1], segments: [], marker: null, startTime: 0, endTime: 0 };
+        // Function to parse one GPX text and return segment data
+        const parseSegment = (gpxText, segmentName) => {
+          const xmlDoc = parser.parseFromString(gpxText, "application/xml");
+          const trkpts = xmlDoc.getElementsByTagNameNS(GPX_NS, "trkpt");
+          const pts = [];
+          for (let j = 0; j < trkpts.length; j++) {
+            const pt = trkpts[j];
+            const lat = parseFloat(pt.getAttribute("lat"));
+            const lng = parseFloat(pt.getAttribute("lon"));
+            const timeElem = pt.getElementsByTagNameNS(GPX_NS, "time")[0];
+            if (!timeElem) continue;
+            const timeStr = timeElem.textContent;
+            const timeMs = Date.parse(timeStr);  // milliseconds since epoch
+            pts.push({ lat, lng, t: (timeMs) });  // store absolute time for now
+          }
+          pts.sort((a, b) => a.t - b.t);  // sort by time just in case
+          return {
+            name: segmentName,
+            points: pts,
+            startTime: pts.length ? pts[0].t : 0,
+            endTime: pts.length ? pts[pts.length - 1].t : 0
+          };
+        };
+        // Parse each segment GPX
+        const swimSeg = parseSegment(swimText, "Swim");
+        const bikeSeg = parseSegment(bikeText, "Bike");
+        const runSeg  = parseSegment(runText, "Run");
+        athlete.segments.push(swimSeg, bikeSeg, runSeg);
+        // Determine athlete's overall start and end time (ms)
+        athlete.startTime = Math.min(swimSeg.startTime, bikeSeg.startTime, runSeg.startTime);
+        athlete.endTime   = Math.max(swimSeg.endTime, bikeSeg.endTime, runSeg.endTime);
+        // Update global start/end time
+        if (athlete.startTime < globalStartTime) globalStartTime = athlete.startTime;
+        if (athlete.endTime > globalEndTime) globalEndTime = athlete.endTime;
+        // Create a marker for this athlete at their start position (initially hidden if not started at global t0)
+        const startLat = swimSeg.points.length ? swimSeg.points[0].lat : (bikeSeg.points.length ? bikeSeg.points[0].lat : runSeg.points[0].lat);
+        const startLng = swimSeg.points.length ? swimSeg.points[0].lng : (bikeSeg.points.length ? bikeSeg.points[0].lng : runSeg.points[0].lng);
+        const marker = L.circleMarker([startLat, startLng], {
+          color: athlete.color, fillColor: athlete.color, fillOpacity: 1.0, radius: 6
+        }).addTo(map);
+        marker.setOpacity(1);
+        athlete.marker = marker;
+        athletes.push(athlete);
+      }
+
+      // Convert all times to relative seconds from global start
+      const globalStartSec = globalStartTime / 1000;
+      const globalEndSec = globalEndTime / 1000;
+      athletes.forEach(ath => {
+        ath.segments.forEach(seg => {
+          seg.points.forEach(pt => {
+            pt.t = pt.t/1000 - globalStartSec;  // replace t with relative seconds
+          });
+          // Update segment start/end to relative seconds
+          seg.startTime = (seg.startTime/1000 - globalStartSec) * 1000;  // store in ms for consistency
+          seg.endTime   = (seg.endTime/1000 - globalStartSec) * 1000;
+        });
+        // Adjust athlete overall startTime/endTime to match (ms)
+        ath.startTime = (ath.startTime/1000 - globalStartSec) * 1000;
+        ath.endTime   = (ath.endTime/1000 - globalStartSec) * 1000;
+      });
+      // Set slider range and enable controls
+      timeSlider.min = "0";
+      timeSlider.max = Math.ceil(globalEndSec - globalStartSec).toString();
+      timeSlider.value = "0";
+      timeSlider.disabled = false;
+      playPauseBtn.disabled = false;
+      // Fit map to all track points bounds
+      const allCoords = [];
+      athletes.forEach(ath => {
+        ath.segments.forEach(seg => {
+          seg.points.forEach(pt => { allCoords.push([pt.lat, pt.lng]); });
+        });
+      });
+      if (allCoords.length) {
+        const bounds = L.latLngBounds(allCoords);
+        map.fitBounds(bounds.pad(0.1));  // pad a bit for margin
+      }
+      // Initialize markers at time 0
+      updateMarkers(0);
+      alert("Files loaded! Use Play/Pause and the slider to replay the race.");
+    } catch (err) {
+      console.error("Error reading GPX files:", err);
+      alert("Failed to load GPX files. Please ensure they are valid GPX format.");
+    }
+  });
+})();
+</script>
+
+</body>
+</html>
