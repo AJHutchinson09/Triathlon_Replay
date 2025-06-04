@@ -185,6 +185,21 @@
     }
   });
 
+  // --- GPX HEADER FIXER ---
+  function fixGpxHeader(gpxText) {
+    // Replace the first <gpx ...> tag with a proper one.
+    // This should handle most malformed or incomplete GPX root tags.
+    return gpxText.replace(
+      /<gpx[\s\S]*?>/,
+      `<gpx version="1.1"
+        creator="TriathlonReplay"
+        xmlns="http://www.topografix.com/GPX/1/1"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xmlns:gpxtpx="http://www.garmin.com/xmlschemas/TrackPointExtension/v1"
+        xsi:schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd">`
+    );
+  }
+
   loadBtn.addEventListener('click', async () => {
     // Gather which athletes have all 3 files selected
     let athletesToLoad = [];
@@ -225,14 +240,16 @@
         ]);
         const athlete = { name: "Athlete " + idx, color: colors[idx-1], segments: [], marker: null, startTime: 0, endTime: 0 };
         const parseSegment = (gpxText, segmentName) => {
-          const xmlDoc = parser.parseFromString(gpxText, "application/xml");
+          const xmlDoc = parser.parseFromString(fixGpxHeader(gpxText), "application/xml");
           const trkpts = xmlDoc.getElementsByTagNameNS(GPX_NS, "trkpt");
           const pts = [];
           for (let j = 0; j < trkpts.length; j++) {
             const pt = trkpts[j];
             const lat = parseFloat(pt.getAttribute("lat"));
             const lng = parseFloat(pt.getAttribute("lon"));
-            const timeElem = pt.getElementsByTagNameNS(GPX_NS, "time")[0];
+            // Try to get <time> from GPX namespace, else fallback to any <time>
+            let timeElem = pt.getElementsByTagNameNS(GPX_NS, "time")[0];
+            if (!timeElem) timeElem = pt.getElementsByTagName("time")[0];
             if (!timeElem) continue;
             const timeStr = timeElem.textContent;
             const timeMs = Date.parse(timeStr);
