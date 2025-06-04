@@ -19,7 +19,7 @@
     .name-label { margin-left: 8px; margin-right: 2px;}
     .athlete-input input[type="text"] { width: 110px; }
     #version { margin-top: 0.5em; color: #888; font-size: 0.9em; }
-    .error-message { color: #b00; margin: 1em 0; font-weight: bold; }
+    .error-message { color: #b00; margin: 1em 0; font-weight: bold; white-space: pre-wrap; }
   </style>
 </head>
 <body>
@@ -37,7 +37,7 @@
   <input type="range" id="timeSlider" min="0" value="0" disabled />
   <span id="timeDisplay">0:00:00</span>
 </div>
-<div id="version">Version 0.2</div>
+<div id="version">Version 0.3</div>
 <div id="error" class="error-message"></div>
 
 <!-- Leaflet JS -->
@@ -124,38 +124,38 @@
       const startT = athlete.startTime;
       const endT = athlete.endTime;
       const marker = athlete.marker;
-      if (marker && typeof marker.setOpacity === "function") {
-        if (currentTime < (startT - globalStartTime) / 1000) {
-          marker.setOpacity(0);
-          continue;
-        }
-        if (marker.options.opacity === 0 || marker.options.opacity === 0.0) marker.setOpacity(1);
-        if (currentTime >= (endT - globalStartTime) / 1000) {
-          const lastSeg = athlete.segments[athlete.segments.length - 1];
-          const lastPt = lastSeg.points[lastSeg.points.length - 1];
-          marker.setLatLng([ lastPt.lat, lastPt.lng ]);
-          continue;
-        }
-        let targetLatLng = null;
-        for (let seg of athlete.segments) {
-          const segStart = (seg.startTime - globalStartTime) / 1000;
-          const segEnd = (seg.endTime - globalStartTime) / 1000;
-          if (currentTime >= segStart && currentTime <= segEnd) {
-            targetLatLng = interpolatePosition(seg.points, currentTime);
-            break;
-          } else if (currentTime < segStart) {
-            const prevSeg = seg === athlete.segments[0] ? null : athlete.segments[athlete.segments.indexOf(seg) - 1];
-            if (prevSeg) {
-              const prevLast = prevSeg.points[prevSeg.points.length - 1];
-              targetLatLng = [ prevLast.lat, prevLast.lng ];
-            } else {
-              targetLatLng = null;
-            }
-            break;
-          }
-        }
-        if (targetLatLng) marker.setLatLng(targetLatLng);
+      // Fully bulletproof: skip if not a valid Leaflet marker
+      if (!marker || typeof marker.setOpacity !== "function" || typeof marker.setLatLng !== "function") continue;
+      if (currentTime < (startT - globalStartTime) / 1000) {
+        marker.setOpacity(0);
+        continue;
       }
+      if (marker.options.opacity === 0 || marker.options.opacity === 0.0) marker.setOpacity(1);
+      if (currentTime >= (endT - globalStartTime) / 1000) {
+        const lastSeg = athlete.segments[athlete.segments.length - 1];
+        const lastPt = lastSeg.points[lastSeg.points.length - 1];
+        marker.setLatLng([ lastPt.lat, lastPt.lng ]);
+        continue;
+      }
+      let targetLatLng = null;
+      for (let seg of athlete.segments) {
+        const segStart = (seg.startTime - globalStartTime) / 1000;
+        const segEnd = (seg.endTime - globalStartTime) / 1000;
+        if (currentTime >= segStart && currentTime <= segEnd) {
+          targetLatLng = interpolatePosition(seg.points, currentTime);
+          break;
+        } else if (currentTime < segStart) {
+          const prevSeg = seg === athlete.segments[0] ? null : athlete.segments[athlete.segments.indexOf(seg) - 1];
+          if (prevSeg) {
+            const prevLast = prevSeg.points[prevSeg.points.length - 1];
+            targetLatLng = [ prevLast.lat, prevLast.lng ];
+          } else {
+            targetLatLng = null;
+          }
+          break;
+        }
+      }
+      if (targetLatLng) marker.setLatLng(targetLatLng);
     }
     timeDisplay.textContent = formatTime(currentTime);
   }
@@ -266,6 +266,7 @@
     athletes = [];
     globalStartTime = Infinity;
     globalEndTime = 0;
+    // Remove ALL CircleMarkers from map
     map.eachLayer(layer => {
       if (layer instanceof L.CircleMarker) {
         map.removeLayer(layer);
@@ -312,13 +313,22 @@
         if (athlete.endTime > globalEndTime) globalEndTime = athlete.endTime;
         const startLat = swimSeg.points.length ? swimSeg.points[0].lat : (bikeSeg.points.length ? bikeSeg.points[0].lat : runSeg.points[0].lat);
         const startLng = swimSeg.points.length ? swimSeg.points[0].lng : (bikeSeg.points.length ? bikeSeg.points[0].lng : runSeg.points[0].lng);
-        const marker = L.circleMarker([startLat, startLng], {
-          color: athlete.color, fillColor: athlete.color, fillOpacity: 1.0, radius: 6
-        }).addTo(map);
-        marker.setOpacity(1);
-        marker.bindTooltip(athlete.name, {permanent: true, direction: "right"});
+        let marker = null;
+        try {
+          marker = L.circleMarker([startLat, startLng], {
+            color: athlete.color, fillColor: athlete.color, fillOpacity: 1.0, radius: 6
+          }).addTo(map);
+          marker.setOpacity(1);
+          marker.bindTooltip(athlete.name, {permanent: true, direction: "right"});
+        } catch (merr) {
+          errorDiv.textContent += `\nFailed to create marker for ${name}: ${merr.message}`;
+          continue;
+        }
         athlete.marker = marker;
-        athletes.push(athlete);
+        // Only push athlete if marker created
+        if (athlete.marker && typeof athlete.marker.setOpacity === "function" && typeof athlete.marker.setLatLng === "function") {
+          athletes.push(athlete);
+        }
       }
 
       if (!athletes.length) {
