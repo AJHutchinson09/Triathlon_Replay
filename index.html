@@ -11,7 +11,7 @@
     body { font: 16px/1.4 sans-serif; margin: 10px; }
     h1 { font-size: 1.25em; }
     #inputs .athlete-input { margin: 0.5em 0; }
-    #map { width: 100%; height: 600px; margin: 1em 0; background: #eee; }
+    #map { width: 100%; height: 900px; margin: 1em 0; background: #eee; }
     #controls { margin: 0.5em 0; }
     #controls button, #controls input[type=range] { vertical-align: middle; }
     #timeDisplay { margin-left: 0.5em; font-family: monospace; }
@@ -37,7 +37,7 @@
   <input type="range" id="timeSlider" min="0" value="0" disabled />
   <span id="timeDisplay">0:00:00</span>
 </div>
-<div id="version">Version 0.1</div>
+<div id="version">Version 0.2</div>
 <div id="error" class="error-message"></div>
 
 <!-- Leaflet JS -->
@@ -50,7 +50,6 @@
   const addAthleteBtn = document.getElementById('addAthleteBtn');
   let athleteCount = 0;
   const maxAthletes = 5;
-  // Default colors for new athletes
   const defaultColors = ["#ff0000", "#0000ff", "#008000", "#ffa500", "#800080"];
   function addAthleteInput() {
     if (athleteCount >= maxAthletes) return;
@@ -70,7 +69,6 @@
     inputsDiv.appendChild(div);
     if (athleteCount === maxAthletes) addAthleteBtn.disabled = true;
   }
-  // Start with one athlete section
   addAthleteInput();
   addAthleteBtn.onclick = addAthleteInput;
 
@@ -126,36 +124,38 @@
       const startT = athlete.startTime;
       const endT = athlete.endTime;
       const marker = athlete.marker;
-      if (currentTime < (startT - globalStartTime) / 1000) {
-        marker.setOpacity(0);
-        continue;
-      }
-      if (marker.options.opacity === 0 || marker.options.opacity === 0.0) marker.setOpacity(1);
-      if (currentTime >= (endT - globalStartTime) / 1000) {
-        const lastSeg = athlete.segments[athlete.segments.length - 1];
-        const lastPt = lastSeg.points[lastSeg.points.length - 1];
-        marker.setLatLng([ lastPt.lat, lastPt.lng ]);
-        continue;
-      }
-      let targetLatLng = null;
-      for (let seg of athlete.segments) {
-        const segStart = (seg.startTime - globalStartTime) / 1000;
-        const segEnd = (seg.endTime - globalStartTime) / 1000;
-        if (currentTime >= segStart && currentTime <= segEnd) {
-          targetLatLng = interpolatePosition(seg.points, currentTime);
-          break;
-        } else if (currentTime < segStart) {
-          const prevSeg = seg === athlete.segments[0] ? null : athlete.segments[athlete.segments.indexOf(seg) - 1];
-          if (prevSeg) {
-            const prevLast = prevSeg.points[prevSeg.points.length - 1];
-            targetLatLng = [ prevLast.lat, prevLast.lng ];
-          } else {
-            targetLatLng = null;
-          }
-          break;
+      if (marker && typeof marker.setOpacity === "function") {
+        if (currentTime < (startT - globalStartTime) / 1000) {
+          marker.setOpacity(0);
+          continue;
         }
+        if (marker.options.opacity === 0 || marker.options.opacity === 0.0) marker.setOpacity(1);
+        if (currentTime >= (endT - globalStartTime) / 1000) {
+          const lastSeg = athlete.segments[athlete.segments.length - 1];
+          const lastPt = lastSeg.points[lastSeg.points.length - 1];
+          marker.setLatLng([ lastPt.lat, lastPt.lng ]);
+          continue;
+        }
+        let targetLatLng = null;
+        for (let seg of athlete.segments) {
+          const segStart = (seg.startTime - globalStartTime) / 1000;
+          const segEnd = (seg.endTime - globalStartTime) / 1000;
+          if (currentTime >= segStart && currentTime <= segEnd) {
+            targetLatLng = interpolatePosition(seg.points, currentTime);
+            break;
+          } else if (currentTime < segStart) {
+            const prevSeg = seg === athlete.segments[0] ? null : athlete.segments[athlete.segments.indexOf(seg) - 1];
+            if (prevSeg) {
+              const prevLast = prevSeg.points[prevSeg.points.length - 1];
+              targetLatLng = [ prevLast.lat, prevLast.lng ];
+            } else {
+              targetLatLng = null;
+            }
+            break;
+          }
+        }
+        if (targetLatLng) marker.setLatLng(targetLatLng);
       }
-      if (targetLatLng) marker.setLatLng(targetLatLng);
     }
     timeDisplay.textContent = formatTime(currentTime);
   }
@@ -200,10 +200,7 @@
     }
   });
 
-  // --- GPX HEADER FIXER ---
   function fixGpxHeader(gpxText) {
-    // Replace the first <gpx ...> tag with a proper one.
-    // This should handle most malformed or incomplete GPX root tags.
     return gpxText.replace(
       /<gpx[\s\S]*?>/,
       `<gpx version="1.1"
@@ -215,7 +212,6 @@
     );
   }
 
-  // --- ROBUST SEGMENT PARSER ---
   function parseSegment(gpxText, segmentName, athleteName) {
     let xmlDoc;
     const parser = new DOMParser();
@@ -224,14 +220,12 @@
     } catch (e) {
       throw new Error(`Could not parse ${segmentName} GPX for ${athleteName}: Invalid XML.`);
     }
-    // Accept trkpt in any namespace
     const trkpts = xmlDoc.getElementsByTagName("trkpt");
     const pts = [];
     for (let j = 0; j < trkpts.length; j++) {
       const pt = trkpts[j];
       const lat = parseFloat(pt.getAttribute("lat"));
       const lng = parseFloat(pt.getAttribute("lon"));
-      // Accept time tag in any namespace
       let timeElem = pt.getElementsByTagName("time")[0];
       if (!timeElem) continue;
       const timeStr = timeElem.textContent;
@@ -269,11 +263,9 @@
       return;
     }
 
-    // Reset any existing data
     athletes = [];
     globalStartTime = Infinity;
     globalEndTime = 0;
-    // Remove any existing markers from map
     map.eachLayer(layer => {
       if (layer instanceof L.CircleMarker) {
         map.removeLayer(layer);
@@ -294,7 +286,6 @@
           swimFile.text(), bikeFile.text(), runFile.text()
         ]);
         const athlete = { name, color, segments: [], marker: null, startTime: 0, endTime: 0 };
-        // Robust parsing with error handling per segment
         let swimSeg, bikeSeg, runSeg;
         try {
           swimSeg = parseSegment(swimText, "Swim", name);
@@ -335,7 +326,6 @@
         return;
       }
 
-      // Convert all times to relative seconds from global start
       const globalStartSec = globalStartTime / 1000;
       const globalEndSec = globalEndTime / 1000;
       athletes.forEach(ath => {
