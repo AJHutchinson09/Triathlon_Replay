@@ -15,6 +15,9 @@
     #controls { margin: 0.5em 0; }
     #controls button, #controls input[type=range] { vertical-align: middle; }
     #timeDisplay { margin-left: 0.5em; font-family: monospace; }
+    .color-label { margin-left: 8px; margin-right: 2px;}
+    .name-label { margin-left: 8px; margin-right: 2px;}
+    .athlete-input input[type="text"] { width: 110px; }
   </style>
 </head>
 <body>
@@ -43,15 +46,23 @@
   const addAthleteBtn = document.getElementById('addAthleteBtn');
   let athleteCount = 0;
   const maxAthletes = 5;
+  // Default colors for new athletes
+  const defaultColors = ["#ff0000", "#0000ff", "#008000", "#ffa500", "#800080"];
   function addAthleteInput() {
     if (athleteCount >= maxAthletes) return;
     athleteCount++;
     const div = document.createElement('div');
     div.className = "athlete-input";
-    div.innerHTML = `<strong>Athlete ${athleteCount}:</strong>
+    div.innerHTML = `
+      <strong>Athlete ${athleteCount}:</strong>
+      <label class="name-label">Name</label>
+      <input type="text" id="athlete${athleteCount}_name" value="Athlete ${athleteCount}" placeholder="Name" />
+      <label class="color-label">Color</label>
+      <input type="color" id="athlete${athleteCount}_color" value="${defaultColors[athleteCount-1] || '#000000'}" />
       Swim <input type="file" id="athlete${athleteCount}_swim" accept=".gpx" />
       Bike <input type="file" id="athlete${athleteCount}_bike" accept=".gpx" />
-      Run <input type="file" id="athlete${athleteCount}_run" accept=".gpx" />`;
+      Run <input type="file" id="athlete${athleteCount}_run" accept=".gpx" />
+    `;
     inputsDiv.appendChild(div);
     if (athleteCount === maxAthletes) addAthleteBtn.disabled = true;
   }
@@ -71,7 +82,6 @@
   const timeSlider = document.getElementById('timeSlider');
   const timeDisplay = document.getElementById('timeDisplay');
 
-  const colors = ["red", "blue", "green", "orange", "purple"];
   let athletes = [];
   let globalStartTime = 0;
   let globalEndTime = 0;
@@ -232,13 +242,18 @@
     const GPX_NS = "http://www.topografix.com/GPX/1/1";
     try {
       for (let idx of athletesToLoad) {
+        const nameInput = document.getElementById(`athlete${idx}_name`);
+        const colorInput = document.getElementById(`athlete${idx}_color`);
+        const name = nameInput ? nameInput.value.trim() || `Athlete ${idx}` : `Athlete ${idx}`;
+        const color = colorInput ? colorInput.value : defaultColors[(idx-1)%defaultColors.length];
+
         const swimFile = document.getElementById(`athlete${idx}_swim`).files[0];
         const bikeFile = document.getElementById(`athlete${idx}_bike`).files[0];
         const runFile  = document.getElementById(`athlete${idx}_run`).files[0];
         const [swimText, bikeText, runText] = await Promise.all([
           swimFile.text(), bikeFile.text(), runFile.text()
         ]);
-        const athlete = { name: "Athlete " + idx, color: colors[idx-1], segments: [], marker: null, startTime: 0, endTime: 0 };
+        const athlete = { name, color, segments: [], marker: null, startTime: 0, endTime: 0 };
         const parseSegment = (gpxText, segmentName) => {
           const xmlDoc = parser.parseFromString(fixGpxHeader(gpxText), "application/xml");
           const trkpts = xmlDoc.getElementsByTagNameNS(GPX_NS, "trkpt");
@@ -277,6 +292,7 @@
           color: athlete.color, fillColor: athlete.color, fillOpacity: 1.0, radius: 6
         }).addTo(map);
         marker.setOpacity(1);
+        marker.bindTooltip(athlete.name, {permanent: true, direction: "right"});
         athlete.marker = marker;
         athletes.push(athlete);
       }
