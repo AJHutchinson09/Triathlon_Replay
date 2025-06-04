@@ -18,6 +18,8 @@
     .color-label { margin-left: 8px; margin-right: 2px;}
     .name-label { margin-left: 8px; margin-right: 2px;}
     .athlete-input input[type="text"] { width: 110px; }
+    #version { margin-top: 0.5em; color: #888; font-size: 0.9em; }
+    .error-message { color: #b00; margin: 1em 0; font-weight: bold; }
   </style>
 </head>
 <body>
@@ -35,6 +37,8 @@
   <input type="range" id="timeSlider" min="0" value="0" disabled />
   <span id="timeDisplay">0:00:00</span>
 </div>
+<div id="version">Version 0.1</div>
+<div id="error" class="error-message"></div>
 
 <!-- Leaflet JS -->
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
@@ -81,6 +85,7 @@
   const playPauseBtn = document.getElementById('playPauseBtn');
   const timeSlider = document.getElementById('timeSlider');
   const timeDisplay = document.getElementById('timeDisplay');
+  const errorDiv = document.getElementById('error');
 
   let athletes = [];
   let globalStartTime = 0;
@@ -210,8 +215,44 @@
     );
   }
 
+  // --- ROBUST SEGMENT PARSER ---
+  function parseSegment(gpxText, segmentName, athleteName) {
+    let xmlDoc;
+    const parser = new DOMParser();
+    try {
+      xmlDoc = parser.parseFromString(fixGpxHeader(gpxText), "application/xml");
+    } catch (e) {
+      throw new Error(`Could not parse ${segmentName} GPX for ${athleteName}: Invalid XML.`);
+    }
+    // Accept trkpt in any namespace
+    const trkpts = xmlDoc.getElementsByTagName("trkpt");
+    const pts = [];
+    for (let j = 0; j < trkpts.length; j++) {
+      const pt = trkpts[j];
+      const lat = parseFloat(pt.getAttribute("lat"));
+      const lng = parseFloat(pt.getAttribute("lon"));
+      // Accept time tag in any namespace
+      let timeElem = pt.getElementsByTagName("time")[0];
+      if (!timeElem) continue;
+      const timeStr = timeElem.textContent;
+      const timeMs = Date.parse(timeStr);
+      if (!isFinite(timeMs)) continue;
+      pts.push({ lat, lng, t: timeMs });
+    }
+    if (!pts.length) {
+      throw new Error(`${segmentName} segment for ${athleteName} has no valid track points with time.`);
+    }
+    pts.sort((a, b) => a.t - b.t);
+    return {
+      name: segmentName,
+      points: pts,
+      startTime: pts[0].t,
+      endTime: pts[pts.length - 1].t
+    };
+  }
+
   loadBtn.addEventListener('click', async () => {
-    // Gather which athletes have all 3 files selected
+    errorDiv.textContent = '';
     let athletesToLoad = [];
     for (let i = 1; i <= athleteCount; i++) {
       const swimInput = document.getElementById(`athlete${i}_swim`);
@@ -224,7 +265,7 @@
       }
     }
     if (athletesToLoad.length === 0) {
-      alert("Please select GPX files for at least one athlete.");
+      errorDiv.textContent = "Please select GPX files for at least one athlete.";
       return;
     }
 
@@ -238,8 +279,7 @@
         map.removeLayer(layer);
       }
     });
-    const parser = new DOMParser();
-    const GPX_NS = "http://www.topografix.com/GPX/1/1";
+
     try {
       for (let idx of athletesToLoad) {
         const nameInput = document.getElementById(`athlete${idx}_name`);
@@ -254,33 +294,26 @@
           swimFile.text(), bikeFile.text(), runFile.text()
         ]);
         const athlete = { name, color, segments: [], marker: null, startTime: 0, endTime: 0 };
-        const parseSegment = (gpxText, segmentName) => {
-          const xmlDoc = parser.parseFromString(fixGpxHeader(gpxText), "application/xml");
-          const trkpts = xmlDoc.getElementsByTagNameNS(GPX_NS, "trkpt");
-          const pts = [];
-          for (let j = 0; j < trkpts.length; j++) {
-            const pt = trkpts[j];
-            const lat = parseFloat(pt.getAttribute("lat"));
-            const lng = parseFloat(pt.getAttribute("lon"));
-            // Try to get <time> from GPX namespace, else fallback to any <time>
-            let timeElem = pt.getElementsByTagNameNS(GPX_NS, "time")[0];
-            if (!timeElem) timeElem = pt.getElementsByTagName("time")[0];
-            if (!timeElem) continue;
-            const timeStr = timeElem.textContent;
-            const timeMs = Date.parse(timeStr);
-            pts.push({ lat, lng, t: (timeMs) });
-          }
-          pts.sort((a, b) => a.t - b.t);
-          return {
-            name: segmentName,
-            points: pts,
-            startTime: pts.length ? pts[0].t : 0,
-            endTime: pts.length ? pts[pts.length - 1].t : 0
-          };
-        };
-        const swimSeg = parseSegment(swimText, "Swim");
-        const bikeSeg = parseSegment(bikeText, "Bike");
-        const runSeg  = parseSegment(runText, "Run");
+        // Robust parsing with error handling per segment
+        let swimSeg, bikeSeg, runSeg;
+        try {
+          swimSeg = parseSegment(swimText, "Swim", name);
+        } catch (err) {
+          errorDiv.textContent += `\n${err.message}`;
+          continue;
+        }
+        try {
+          bikeSeg = parseSegment(bikeText, "Bike", name);
+        } catch (err) {
+          errorDiv.textContent += `\n${err.message}`;
+          continue;
+        }
+        try {
+          runSeg = parseSegment(runText, "Run", name);
+        } catch (err) {
+          errorDiv.textContent += `\n${err.message}`;
+          continue;
+        }
         athlete.segments.push(swimSeg, bikeSeg, runSeg);
         athlete.startTime = Math.min(swimSeg.startTime, bikeSeg.startTime, runSeg.startTime);
         athlete.endTime   = Math.max(swimSeg.endTime, bikeSeg.endTime, runSeg.endTime);
@@ -295,6 +328,11 @@
         marker.bindTooltip(athlete.name, {permanent: true, direction: "right"});
         athlete.marker = marker;
         athletes.push(athlete);
+      }
+
+      if (!athletes.length) {
+        errorDiv.textContent = errorDiv.textContent || "Failed to load any athletes' GPX data. Please check your files.";
+        return;
       }
 
       // Convert all times to relative seconds from global start
@@ -327,10 +365,10 @@
         map.fitBounds(bounds.pad(0.1));
       }
       updateMarkers(0);
+      errorDiv.textContent = '';
       alert("Files loaded! Use Play/Pause and the slider to replay the race.");
     } catch (err) {
-      console.error("Error reading GPX files:", err);
-      alert("Failed to load GPX files. Please ensure they are valid GPX format.");
+      errorDiv.textContent = "Unexpected error: " + err.message;
     }
   });
 })();
