@@ -32,10 +32,17 @@
 
 <div id="controls">
   <button id="playPauseBtn" disabled>Play</button>
+  <label for="speedSelect" style="margin-left:1em;">Speed</label>
+  <select id="speedSelect">
+    <option value="1">1x</option>
+    <option value="30">30x</option>
+    <option value="60">60x</option>
+    <option value="120">120x</option>
+  </select>
   <input type="range" id="timeSlider" min="0" value="0" disabled />
   <span id="timeDisplay">0:00:00</span>
 </div>
-<div id="version">Version 1.0</div>
+<div id="version">Version 1.1</div>
 <div id="error" class="error-message"></div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -78,6 +85,7 @@
   const timeSlider = document.getElementById('timeSlider');
   const timeDisplay = document.getElementById('timeDisplay');
   const errorDiv = document.getElementById('error');
+  const speedSelect = document.getElementById('speedSelect');
 
   let athletes = [];
   let globalStartSec = 0;
@@ -135,19 +143,15 @@
         continue;
       }
       if (marker.options.opacity === 0 || marker.options.opacity === 0.0) marker.setOpacity(1);
-
-      // Find which segment is current, or if in transition
       let found = false;
       for (let i = 0; i < athlete.segments.length; ++i) {
         const seg = athlete.segments[i];
         if (currentTime >= seg.startTime && currentTime <= seg.endTime) {
-          // On this segment
           const pos = interpolatePosition(seg.points, currentTime);
           if (pos) marker.setLatLng(pos);
           found = true;
           break;
         } else if (currentTime < seg.startTime) {
-          // In transition after previous segment
           if (i > 0) {
             const prev = athlete.segments[i-1];
             marker.setLatLng([prev.points[prev.points.length-1].lat, prev.points[prev.points.length-1].lng]);
@@ -157,7 +161,6 @@
         }
       }
       if (!found) {
-        // After all segments: fix at the end of last
         const lastSeg = athlete.segments[athlete.segments.length-1];
         marker.setLatLng([lastSeg.points[lastSeg.points.length-1].lat, lastSeg.points[lastSeg.points.length-1].lng]);
       }
@@ -179,17 +182,16 @@
         timeSlider.value = "0";
         updateMarkers(0);
       }
-      const stepSeconds = 1;
       const intervalMs = 100;
       timerId = setInterval(() => {
         let current = Number(timeSlider.value);
         let max = Number(timeSlider.max);
-        if (current < max) {
-          let next = current + stepSeconds;
-          if (next > max) next = max;
-          timeSlider.value = String(next);
-          updateMarkers(next);
-        } else {
+        let speed = Number(speedSelect.value) || 1;
+        let next = current + speed * (intervalMs / 1000);
+        if (next > max) next = max;
+        timeSlider.value = String(next);
+        updateMarkers(next);
+        if (next >= max) {
           clearInterval(timerId);
           playing = false;
           playPauseBtn.textContent = "Play";
@@ -245,8 +247,8 @@
     return {
       name: segmentName,
       points: pts,
-      startTime: pts[0].t / 1000, // seconds
-      endTime: pts[pts.length - 1].t / 1000 // seconds
+      startTime: pts[0].t / 1000,
+      endTime: pts[pts.length - 1].t / 1000
     };
   }
 
@@ -268,7 +270,6 @@
       return;
     }
 
-    // Clear previous
     athletes = [];
     globalStartSec = Infinity;
     globalEndSec = 0;
@@ -337,11 +338,10 @@
         return;
       }
 
-      // Normalize all point times as seconds since globalStartSec
       athletes.forEach(ath => {
         ath.segments.forEach(seg => {
           seg.points.forEach(pt => {
-            pt.t = pt.t/1000 - globalStartSec; // seconds since global race start
+            pt.t = pt.t/1000 - globalStartSec;
           });
           seg.startTime = seg.startTime - globalStartSec;
           seg.endTime   = seg.endTime   - globalStartSec;
@@ -356,6 +356,7 @@
       timeSlider.value = "0";
       timeSlider.disabled = false;
       playPauseBtn.disabled = false;
+      speedSelect.value = "1";
       const allCoords = [];
       athletes.forEach(ath => {
         ath.segments.forEach(seg => {
