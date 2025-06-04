@@ -9,7 +9,7 @@
     body { font: 16px/1.4 sans-serif; margin: 10px; }
     h1 { font-size: 1.25em; }
     #inputs .athlete-input { margin: 0.5em 0; }
-    #map { width: 100%; height: 900px; margin: 1em 0; background: #eee; }
+    #map { width: 100%; height: 900px; margin: 1em 0; background: #eee; position: relative; }
     #controls { margin: 0.5em 0; }
     #controls button, #controls input[type=range] { vertical-align: middle; }
     #timeDisplay { margin-left: 0.5em; font-family: monospace; }
@@ -18,6 +18,34 @@
     .athlete-input input[type="text"] { width: 110px; }
     #version { margin-top: 0.5em; color: #888; font-size: 0.9em; }
     .error-message { color: #b00; margin: 1em 0; font-weight: bold; white-space: pre-wrap; }
+    #athleteKey {
+      position: absolute;
+      top: 30px;
+      left: 40px;
+      z-index: 1000;
+      background: rgba(255,255,255,0.95);
+      border-radius: 8px;
+      box-shadow: 0 2px 8px #0002;
+      padding: 10px 16px;
+      font-size: 1em;
+      min-width: 140px;
+      max-width: 240px;
+      pointer-events: none;
+    }
+    #athleteKey .key-row {
+      display: flex;
+      align-items: center;
+      margin-bottom: 6px;
+    }
+    #athleteKey .color-box {
+      width: 20px;
+      height: 20px;
+      border-radius: 4px;
+      border: 1.5px solid #777;
+      margin-right: 10px;
+      flex-shrink: 0;
+    }
+    #athleteKey strong { display: block; margin-bottom: 6px; }
   </style>
 </head>
 <body>
@@ -28,7 +56,9 @@
 <button id="addAthleteBtn" type="button">Add Athlete</button>
 <button id="loadBtn">Load and Prepare</button>
 
-<div id="map"></div>
+<div id="map" style="position:relative;">
+  <div id="athleteKey"></div>
+</div>
 
 <div id="controls">
   <button id="playPauseBtn" disabled>Play</button>
@@ -42,7 +72,7 @@
   <input type="range" id="timeSlider" min="0" value="0" disabled />
   <span id="timeDisplay">0:00:00</span>
 </div>
-<div id="version">Version 1.1</div>
+<div id="version">Version 1.2</div>
 <div id="error" class="error-message"></div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -86,6 +116,7 @@
   const timeDisplay = document.getElementById('timeDisplay');
   const errorDiv = document.getElementById('error');
   const speedSelect = document.getElementById('speedSelect');
+  const athleteKeyDiv = document.getElementById('athleteKey');
 
   let athletes = [];
   let globalStartSec = 0;
@@ -122,16 +153,26 @@
     return [lat, lng];
   }
 
-  function createColoredMarker(lat, lng, color, name) {
+  function createColoredMarker(lat, lng, color) {
     const icon = L.divIcon({
       className: '',
       html: `<svg width="20" height="20"><circle cx="10" cy="10" r="8" fill="${color}" stroke="#222" stroke-width="2"/></svg>`,
       iconSize: [20, 20],
       iconAnchor: [10, 10]
     });
-    const marker = L.marker([lat, lng], {icon});
-    marker.bindTooltip(name, {permanent: true, direction: "right"});
-    return marker;
+    return L.marker([lat, lng], {icon});
+  }
+
+  function renderAthleteKey(athletes) {
+    athleteKeyDiv.innerHTML = '<strong>Participants:</strong>';
+    for (const athlete of athletes) {
+      athleteKeyDiv.innerHTML +=
+        `<div class="key-row">
+           <span class="color-box" style="background:${athlete.color}"></span>
+           <span>${athlete.name}</span>
+         </div>`;
+    }
+    athleteKeyDiv.style.display = 'block';
   }
 
   function updateMarkers(currentTime) {
@@ -321,7 +362,7 @@
         const startLng = swimSeg.points.length ? swimSeg.points[0].lng : (bikeSeg.points.length ? bikeSeg.points[0].lng : runSeg.points[0].lng);
         let marker = null;
         try {
-          marker = createColoredMarker(startLat, startLng, color, name).addTo(map);
+          marker = createColoredMarker(startLat, startLng, color).addTo(map);
           marker.setOpacity(1);
         } catch (merr) {
           errorDiv.textContent += `\nFailed to create marker for ${name}: ${merr.message}`;
@@ -368,6 +409,7 @@
         map.fitBounds(bounds.pad(0.1));
       }
       updateMarkers(0);
+      renderAthleteKey(athletes);
       errorDiv.textContent = '';
       alert("Files loaded! Use Play/Pause and the slider to replay the race.");
     } catch (err) {
