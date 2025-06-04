@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Triathlon Race Replay</title>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
     body { font: 16px/1.4 sans-serif; margin: 10px; }
     h1 { font-size: 1.25em; }
@@ -35,13 +35,12 @@
   <input type="range" id="timeSlider" min="0" value="0" disabled />
   <span id="timeDisplay">0:00:00</span>
 </div>
-<div id="version">Version 0.4</div>
+<div id="version">Version 1.0</div>
 <div id="error" class="error-message"></div>
 
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
 (() => {
-  // --- DYNAMIC ATHLETE FILE INPUTS ---
   const inputsDiv = document.getElementById('inputs');
   const addAthleteBtn = document.getElementById('addAthleteBtn');
   let athleteCount = 0;
@@ -68,7 +67,6 @@
   addAthleteInput();
   addAthleteBtn.onclick = addAthleteInput;
 
-  // --- MAP AND REPLAY LOGIC ---
   const map = L.map('map').setView([0, 0], 2);
   L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 19,
@@ -82,8 +80,8 @@
   const errorDiv = document.getElementById('error');
 
   let athletes = [];
-  let globalStartTime = 0;
-  let globalEndTime = 0;
+  let globalStartSec = 0;
+  let globalEndSec = 0;
   let playing = false;
   let timerId = null;
 
@@ -98,6 +96,7 @@
   }
 
   function interpolatePosition(points, t) {
+    if (points.length === 0) return null;
     if (t <= points[0].t) return [points[0].lat, points[0].lng];
     if (t >= points[points.length - 1].t) return [points[points.length - 1].lat, points[points.length - 1].lng];
     let low = 0, high = points.length - 1;
@@ -116,12 +115,9 @@
   }
 
   function createColoredMarker(lat, lng, color, name) {
-    // SVG Circle as icon
     const icon = L.divIcon({
       className: '',
-      html: `<svg width="20" height="20" style="overflow:visible;">
-               <circle cx="10" cy="10" r="8" fill="${color}" stroke="#222" stroke-width="2"/>
-             </svg>`,
+      html: `<svg width="20" height="20"><circle cx="10" cy="10" r="8" fill="${color}" stroke="#222" stroke-width="2"/></svg>`,
       iconSize: [20, 20],
       iconAnchor: [10, 10]
     });
@@ -132,40 +128,39 @@
 
   function updateMarkers(currentTime) {
     for (let athlete of athletes) {
-      const startT = athlete.startTime;
-      const endT = athlete.endTime;
       const marker = athlete.marker;
       if (!marker || typeof marker.setLatLng !== "function" || typeof marker.setOpacity !== "function") continue;
-      if (currentTime < (startT - globalStartTime) / 1000) {
+      if (currentTime < athlete.startTime) {
         marker.setOpacity(0);
         continue;
       }
       if (marker.options.opacity === 0 || marker.options.opacity === 0.0) marker.setOpacity(1);
-      if (currentTime >= (endT - globalStartTime) / 1000) {
-        const lastSeg = athlete.segments[athlete.segments.length - 1];
-        const lastPt = lastSeg.points[lastSeg.points.length - 1];
-        marker.setLatLng([ lastPt.lat, lastPt.lng ]);
-        continue;
-      }
-      let targetLatLng = null;
-      for (let seg of athlete.segments) {
-        const segStart = (seg.startTime - globalStartTime) / 1000;
-        const segEnd = (seg.endTime - globalStartTime) / 1000;
-        if (currentTime >= segStart && currentTime <= segEnd) {
-          targetLatLng = interpolatePosition(seg.points, currentTime);
+
+      // Find which segment is current, or if in transition
+      let found = false;
+      for (let i = 0; i < athlete.segments.length; ++i) {
+        const seg = athlete.segments[i];
+        if (currentTime >= seg.startTime && currentTime <= seg.endTime) {
+          // On this segment
+          const pos = interpolatePosition(seg.points, currentTime);
+          if (pos) marker.setLatLng(pos);
+          found = true;
           break;
-        } else if (currentTime < segStart) {
-          const prevSeg = seg === athlete.segments[0] ? null : athlete.segments[athlete.segments.indexOf(seg) - 1];
-          if (prevSeg) {
-            const prevLast = prevSeg.points[prevSeg.points.length - 1];
-            targetLatLng = [ prevLast.lat, prevLast.lng ];
-          } else {
-            targetLatLng = null;
+        } else if (currentTime < seg.startTime) {
+          // In transition after previous segment
+          if (i > 0) {
+            const prev = athlete.segments[i-1];
+            marker.setLatLng([prev.points[prev.points.length-1].lat, prev.points[prev.points.length-1].lng]);
           }
+          found = true;
           break;
         }
       }
-      if (targetLatLng) marker.setLatLng(targetLatLng);
+      if (!found) {
+        // After all segments: fix at the end of last
+        const lastSeg = athlete.segments[athlete.segments.length-1];
+        marker.setLatLng([lastSeg.points[lastSeg.points.length-1].lat, lastSeg.points[lastSeg.points.length-1].lng]);
+      }
     }
     timeDisplay.textContent = formatTime(currentTime);
   }
@@ -184,7 +179,7 @@
         timeSlider.value = "0";
         updateMarkers(0);
       }
-      const stepSeconds = 5;
+      const stepSeconds = 1;
       const intervalMs = 100;
       timerId = setInterval(() => {
         let current = Number(timeSlider.value);
@@ -250,8 +245,8 @@
     return {
       name: segmentName,
       points: pts,
-      startTime: pts[0].t,
-      endTime: pts[pts.length - 1].t
+      startTime: pts[0].t / 1000, // seconds
+      endTime: pts[pts.length - 1].t / 1000 // seconds
     };
   }
 
@@ -275,8 +270,8 @@
 
     // Clear previous
     athletes = [];
-    globalStartTime = Infinity;
-    globalEndTime = 0;
+    globalStartSec = Infinity;
+    globalEndSec = 0;
     map.eachLayer(layer => {
       if (layer instanceof L.Marker) {
         map.removeLayer(layer);
@@ -319,8 +314,8 @@
         athlete.segments.push(swimSeg, bikeSeg, runSeg);
         athlete.startTime = Math.min(swimSeg.startTime, bikeSeg.startTime, runSeg.startTime);
         athlete.endTime   = Math.max(swimSeg.endTime, bikeSeg.endTime, runSeg.endTime);
-        if (athlete.startTime < globalStartTime) globalStartTime = athlete.startTime;
-        if (athlete.endTime > globalEndTime) globalEndTime = athlete.endTime;
+        if (athlete.startTime < globalStartSec) globalStartSec = athlete.startTime;
+        if (athlete.endTime > globalEndSec) globalEndSec = athlete.endTime;
         const startLat = swimSeg.points.length ? swimSeg.points[0].lat : (bikeSeg.points.length ? bikeSeg.points[0].lat : runSeg.points[0].lat);
         const startLng = swimSeg.points.length ? swimSeg.points[0].lng : (bikeSeg.points.length ? bikeSeg.points[0].lng : runSeg.points[0].lng);
         let marker = null;
@@ -342,21 +337,22 @@
         return;
       }
 
-      const globalStartSec = globalStartTime / 1000;
-      const globalEndSec = globalEndTime / 1000;
+      // Normalize all point times as seconds since globalStartSec
       athletes.forEach(ath => {
         ath.segments.forEach(seg => {
           seg.points.forEach(pt => {
-            pt.t = pt.t/1000 - globalStartSec;
+            pt.t = pt.t/1000 - globalStartSec; // seconds since global race start
           });
-          seg.startTime = (seg.startTime/1000 - globalStartSec) * 1000;
-          seg.endTime   = (seg.endTime/1000 - globalStartSec) * 1000;
+          seg.startTime = seg.startTime - globalStartSec;
+          seg.endTime   = seg.endTime   - globalStartSec;
         });
-        ath.startTime = (ath.startTime/1000 - globalStartSec) * 1000;
-        ath.endTime   = (ath.endTime/1000 - globalStartSec) * 1000;
+        ath.startTime = ath.startTime - globalStartSec;
+        ath.endTime   = ath.endTime   - globalStartSec;
       });
+
+      const totalSec = Math.ceil(globalEndSec - globalStartSec);
       timeSlider.min = "0";
-      timeSlider.max = Math.ceil(globalEndSec - globalStartSec).toString();
+      timeSlider.max = totalSec.toString();
       timeSlider.value = "0";
       timeSlider.disabled = false;
       playPauseBtn.disabled = false;
