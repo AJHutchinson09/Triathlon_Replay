@@ -7,7 +7,6 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
     body { font: 16px/1.4 sans-serif; margin: 10px; }
-    h1 { font-size: 1.25em; }
     #inputs .athlete-input { margin: 0.5em 0; }
     #map { width: 100%; height: 900px; margin: 1em 0; background: #eee; position: relative; }
     #controls { margin: 0.5em 0; }
@@ -51,7 +50,7 @@
 <body>
 
 <h1>Triathlon Race Replay</h1>
-<p>Upload each athlete's GPX files (Swim, Bike, Run):</p>
+<p>Upload each athlete's GPX files (Swim optional, Bike and Run required):</p>
 <div id="inputs"></div>
 <button id="addAthleteBtn" type="button">Add Athlete</button>
 <button id="loadBtn">Load and Prepare</button>
@@ -72,7 +71,7 @@
   <input type="range" id="timeSlider" min="0" value="0" disabled />
   <span id="timeDisplay">0:00:00</span>
 </div>
-<div id="version">Version 1.2</div>
+<div id="version">Version 1.3</div>
 <div id="error" class="error-message"></div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -117,7 +116,6 @@
   const errorDiv = document.getElementById('error');
   const speedSelect = document.getElementById('speedSelect');
   const athleteKeyDiv = document.getElementById('athleteKey');
-
   let athletes = [];
   let globalStartSec = 0;
   let globalEndSec = 0;
@@ -196,12 +194,15 @@
           if (i > 0) {
             const prev = athlete.segments[i-1];
             marker.setLatLng([prev.points[prev.points.length-1].lat, prev.points[prev.points.length-1].lng]);
+          } else {
+            // For athletes missing swim, wait at bike start
+            marker.setLatLng([seg.points[0].lat, seg.points[0].lng]);
           }
           found = true;
           break;
         }
       }
-      if (!found) {
+      if (!found && athlete.segments.length > 0) {
         const lastSeg = athlete.segments[athlete.segments.length-1];
         marker.setLatLng([lastSeg.points[lastSeg.points.length-1].lat, lastSeg.points[lastSeg.points.length-1].lng]);
       }
@@ -297,17 +298,15 @@
     errorDiv.textContent = '';
     let athletesToLoad = [];
     for (let i = 1; i <= athleteCount; i++) {
-      const swimInput = document.getElementById(`athlete${i}_swim`);
       const bikeInput = document.getElementById(`athlete${i}_bike`);
       const runInput  = document.getElementById(`athlete${i}_run`);
-      if (swimInput && swimInput.files.length &&
-          bikeInput && bikeInput.files.length &&
-          runInput && runInput.files.length) {
+      // Bike and Run are required
+      if (bikeInput && bikeInput.files.length && runInput && runInput.files.length) {
         athletesToLoad.push(i);
       }
     }
     if (athletesToLoad.length === 0) {
-      errorDiv.textContent = "Please select GPX files for at least one athlete.";
+      errorDiv.textContent = "Please select at least bike and run GPX files for at least one athlete.";
       return;
     }
 
@@ -327,39 +326,55 @@
         const name = nameInput ? nameInput.value.trim() || `Athlete ${idx}` : `Athlete ${idx}`;
         const color = colorInput ? colorInput.value : defaultColors[(idx-1)%defaultColors.length];
 
-        const swimFile = document.getElementById(`athlete${idx}_swim`).files[0];
-        const bikeFile = document.getElementById(`athlete${idx}_bike`).files[0];
-        const runFile  = document.getElementById(`athlete${idx}_run`).files[0];
-        const [swimText, bikeText, runText] = await Promise.all([
-          swimFile.text(), bikeFile.text(), runFile.text()
-        ]);
+        const swimInput = document.getElementById(`athlete${idx}_swim`);
+        const bikeInput = document.getElementById(`athlete${idx}_bike`);
+        const runInput  = document.getElementById(`athlete${idx}_run`);
+        let swimSeg = null, bikeSeg = null, runSeg = null;
+        let swimText = null, bikeText = null, runText = null;
+
+        if (swimInput && swimInput.files.length) {
+          swimText = await swimInput.files[0].text();
+        }
+        bikeText = await bikeInput.files[0].text();
+        runText  = await runInput.files[0].text();
+
         const athlete = { name, color, segments: [], marker: null, startTime: 0, endTime: 0 };
-        let swimSeg, bikeSeg, runSeg;
+
         try {
-          swimSeg = parseSegment(swimText, "Swim", name);
+          if (swimText) {
+            swimSeg = parseSegment(swimText, "Swim", name);
+            athlete.segments.push(swimSeg);
+          }
         } catch (err) {
-          errorDiv.textContent += `\n${err.message}`;
-          continue;
+          errorDiv.textContent += `\n${err.message} (Skipping swim for ${name})`;
         }
         try {
           bikeSeg = parseSegment(bikeText, "Bike", name);
+          athlete.segments.push(bikeSeg);
         } catch (err) {
           errorDiv.textContent += `\n${err.message}`;
           continue;
         }
         try {
           runSeg = parseSegment(runText, "Run", name);
+          athlete.segments.push(runSeg);
         } catch (err) {
           errorDiv.textContent += `\n${err.message}`;
           continue;
         }
-        athlete.segments.push(swimSeg, bikeSeg, runSeg);
-        athlete.startTime = Math.min(swimSeg.startTime, bikeSeg.startTime, runSeg.startTime);
-        athlete.endTime   = Math.max(swimSeg.endTime, bikeSeg.endTime, runSeg.endTime);
+
+        // Determine athlete start/end times
+        let segStartTimes = athlete.segments.map(seg => seg.startTime);
+        let segEndTimes = athlete.segments.map(seg => seg.endTime);
+        athlete.startTime = Math.min(...segStartTimes);
+        athlete.endTime = Math.max(...segEndTimes);
+
         if (athlete.startTime < globalStartSec) globalStartSec = athlete.startTime;
         if (athlete.endTime > globalEndSec) globalEndSec = athlete.endTime;
-        const startLat = swimSeg.points.length ? swimSeg.points[0].lat : (bikeSeg.points.length ? bikeSeg.points[0].lat : runSeg.points[0].lat);
-        const startLng = swimSeg.points.length ? swimSeg.points[0].lng : (bikeSeg.points.length ? bikeSeg.points[0].lng : runSeg.points[0].lng);
+
+        // Marker start: swim start if exists, else bike start
+        const startLat = swimSeg?.points?.[0]?.lat ?? bikeSeg.points[0].lat;
+        const startLng = swimSeg?.points?.[0]?.lng ?? bikeSeg.points[0].lng;
         let marker = null;
         try {
           marker = createColoredMarker(startLat, startLng, color).addTo(map);
