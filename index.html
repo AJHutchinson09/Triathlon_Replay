@@ -157,31 +157,21 @@
       justify-content: flex-start;
     }
     #controls-row2 {
-      margin: 0.5em 0;
-    }
-    #controls-row3 {
-      justify-content: center;
-      margin-bottom: 0.1em;
-    }
-    #controls label { margin-bottom: 0; }
-    #playPauseBtn {
-      min-width: 86px;
-      max-width: 86px;
-      width: 86px;
-      text-align: center;
-      box-sizing: border-box;
+      /* -- The key fix for slider fit -- */
+      flex-wrap: nowrap;
+      gap: 0.6em;
     }
     #timeSlider {
-      width: 320px;
-      max-width: 90vw;
-      min-width: 200px;
-      margin-right: 1em;
-      margin-left: 0.2em;
-      display: inline-block;
-      flex: none;
+      flex: 1 1 0;
+      min-width: 120px;
+      max-width: 100%;
+      margin-right: 0.5em;
+      margin-left: 0;
+      display: block;
+      box-sizing: border-box;
     }
     #timeDisplay {
-      margin-left: 0.8em;
+      margin-left: 0;
       font-family: 'Inter', 'Menlo', 'monospace', monospace;
       font-weight: 600;
       color: #334155;
@@ -189,6 +179,8 @@
       padding: 2px 8px;
       border-radius: 5px;
       font-size: 1.07em;
+      white-space: nowrap;
+      flex-shrink: 0;
     }
     #version {
       margin-top: 1.2em;
@@ -294,6 +286,9 @@
       .card, #controls { padding: 1em 0.3em; }
       #controls-row1, #controls-row2, #controls-row3 { flex-direction: column; align-items: stretch; gap: 0.5em; }
       #controls { gap: 0.7em; }
+      #controls-row2 { flex-direction: column; align-items: stretch; gap: 0.5em; flex-wrap: wrap;}
+      #timeSlider { width: 100%; min-width: 0; margin-right: 0; }
+      #timeDisplay { margin-left: 0; margin-top: 0.2em; align-self: flex-end; }
     }
   </style>
 </head>
@@ -346,7 +341,6 @@
     </div>
   </div>
 </div>
-
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
 (() => {
