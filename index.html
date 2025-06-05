@@ -164,7 +164,22 @@
       margin-bottom: 0.1em;
     }
     #controls label { margin-bottom: 0; }
-    #controls input[type=range] { flex: 1; min-width: 0; }
+    #playPauseBtn {
+      min-width: 86px;
+      max-width: 86px;
+      width: 86px;
+      text-align: center;
+      box-sizing: border-box;
+    }
+    #timeSlider {
+      width: 320px;
+      max-width: 90vw;
+      min-width: 200px;
+      margin-right: 1em;
+      margin-left: 0.2em;
+      display: inline-block;
+      flex: none;
+    }
     #timeDisplay {
       margin-left: 0.8em;
       font-family: 'Inter', 'Menlo', 'monospace', monospace;
@@ -350,8 +365,16 @@
   let athleteCount = 0;
   const maxAthletes = 10;
   const defaultColors = [
-    "#ff0000", "#2563eb", "#22c55e", "#f59e42", "#a21caf",
-    "#eab308", "#14b8a6", "#f43f5e", "#6366f1", "#0ea5e9"
+    "#e6194b", // Red
+    "#3cb44b", // Green
+    "#ffe119", // Yellow
+    "#4363d8", // Blue
+    "#f58231", // Orange
+    "#911eb4", // Purple
+    "#46f0f0", // Cyan
+    "#f032e6", // Magenta
+    "#bcf60c", // Lime
+    "#fabebe"  // Pink
   ];
   let athletes = [];
   let globalStartSec = 0;
