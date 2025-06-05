@@ -84,6 +84,7 @@
       transition: background 0.17s, box-shadow 0.17s;
       box-shadow: 0 1px 3px 0 rgba(60, 60, 60, 0.07);
       outline: none;
+      min-width: 40px;
     }
     button:disabled {
       background: #bdbdbd;
@@ -95,9 +96,16 @@
       background: #1746a0;
     }
     .icon-btn {
-      padding: 0.6em 0.8em;
+      padding: 0.6em 1.3em;
       font-size: 1.1em;
       margin-right: 0.4em;
+      min-width: 60px;
+    }
+    .jump-btns-row {
+      display: flex;
+      justify-content: center;
+      gap: 1em;
+      margin-top: 0.7em;
     }
     input[type="text"] {
       border: 1px solid #d0d7de;
@@ -138,12 +146,25 @@
       margin: 0.5em 0 0.5em 0;
       box-shadow: 0 1px 4px rgba(30, 41, 59, 0.07);
       display: flex;
-      flex-wrap: wrap;
+      flex-direction: column;
+      gap: 0.5em;
+    }
+    #controls-row1, #controls-row2, #controls-row3 {
+      display: flex;
       align-items: center;
       gap: 0.6em;
+      width: 100%;
+      justify-content: flex-start;
+    }
+    #controls-row2 {
+      margin: 0.5em 0;
+    }
+    #controls-row3 {
+      justify-content: center;
+      margin-bottom: 0.1em;
     }
     #controls label { margin-bottom: 0; }
-    #controls button, #controls input[type=range] { vertical-align: middle; }
+    #controls input[type=range] { flex: 1; min-width: 0; }
     #timeDisplay {
       margin-left: 0.8em;
       font-family: 'Inter', 'Menlo', 'monospace', monospace;
@@ -196,27 +217,43 @@
       font-size: 1.07em;
       min-width: 170px;
       max-width: 270px;
-      pointer-events: none;
+      pointer-events: auto;
       border: 1px solid #e5e7eb;
     }
     #athleteKey .key-row {
       display: flex;
       align-items: center;
       margin-bottom: 7px;
+      gap: 0.5em;
+      cursor: pointer;
+      border-radius: 7px;
+      padding: 2px 2px 2px 0;
+      transition: background 0.15s;
+      user-select: none;
+    }
+    #athleteKey .key-row.visible {
+      background: #e0e7ff;
+    }
+    #athleteKey .key-row:not(.visible) {
+      opacity: 0.45;
+      filter: grayscale(0.4);
     }
     #athleteKey .color-box {
       width: 22px;
       height: 22px;
       border-radius: 5px;
       border: 2px solid #64748b;
-      margin-right: 10px;
+      margin-right: 7px;
       flex-shrink: 0;
       box-shadow: 0 1px 3px #cbd5e1;
     }
-    #athleteKey .segment-icons {
-      margin-left: 8px;
-      font-size: 1em;
-      opacity: 0.7;
+    #athleteKey .ath-toggle {
+      accent-color: #2563eb;
+      margin-right: 5px;
+      width: 1.1em;
+      height: 1.1em;
+      cursor: pointer;
+      vertical-align: middle;
     }
     #athleteKey strong { display: block; margin-bottom: 8px; font-weight: 600; color: #1e293b;}
     label { font-weight: 500; color: #1e293b; }
@@ -240,7 +277,8 @@
       .container { padding: 0 3px; }
       #map { height: 220px; }
       .card, #controls { padding: 1em 0.3em; }
-      #controls { flex-direction: column; gap: 0.6em; }
+      #controls-row1, #controls-row2, #controls-row3 { flex-direction: column; align-items: stretch; gap: 0.5em; }
+      #controls { gap: 0.7em; }
     }
   </style>
 </head>
@@ -261,22 +299,28 @@
     <div class="left-panel">
       <div class="card">
         <div id="controls">
-          <button id="jumpBackBtn" type="button" title="Jump Back 30s" class="icon-btn">&#8678; 30s</button>
-          <button id="playPauseBtn" disabled>Play</button>
-          <button id="jumpForwardBtn" type="button" title="Jump Forward 30s" class="icon-btn">30s &#8680;</button>
-          <label for="speedSelect" style="margin-left:1em;">Speed</label>
-          <select id="speedSelect">
-            <option value="1">1x</option>
-            <option value="30">30x</option>
-            <option value="60">60x</option>
-            <option value="120">120x</option>
-            <option value="180">180x</option>
-            <option value="240">240x</option>
-          </select>
-          <input type="range" id="timeSlider" min="0" value="0" disabled />
-          <span id="timeDisplay">0:00:00</span>
+          <div id="controls-row1">
+            <button id="playPauseBtn" disabled>Play</button>
+            <label for="speedSelect" style="margin-left:1em;">Speed</label>
+            <select id="speedSelect">
+              <option value="1">1x</option>
+              <option value="30">30x</option>
+              <option value="60">60x</option>
+              <option value="120">120x</option>
+              <option value="180">180x</option>
+              <option value="240">240x</option>
+            </select>
+          </div>
+          <div id="controls-row2">
+            <input type="range" id="timeSlider" min="0" value="0" disabled />
+            <span id="timeDisplay">0:00:00</span>
+          </div>
+          <div id="controls-row3" class="jump-btns-row">
+            <button id="jumpBackBtn" type="button" title="Jump Back 30s" class="icon-btn">&#8678; 30s</button>
+            <button id="jumpForwardBtn" type="button" title="Jump Forward 30s" class="icon-btn">30s &#8680;</button>
+          </div>
         </div>
-        <div id="version">Version 1.4</div>
+        <div id="version">Version 1.5</div>
         <div id="error" class="error-message" style="display:none;"></div>
       </div>
     </div>
@@ -314,6 +358,9 @@
   let globalEndSec = 0;
   let playing = false;
   let timerId = null;
+
+  // Visibility state: athleteIdx (1-based) -> boolean
+  let athleteVisibility = {};
 
   function addAthleteInput() {
     if (athleteCount >= maxAthletes) return;
@@ -392,39 +439,59 @@
     return L.marker([lat, lng], {icon});
   }
 
+  // Renders the legend with athlete show/hide checkboxes
   function renderAthleteKey(athletes) {
     athleteKeyDiv.innerHTML = '<strong>Participants:</strong>';
-    for (const athlete of athletes) {
-      // Determine which segments the athlete has
-      let hasSwim = false, hasBike = false, hasRun = false;
-      athlete.segments.forEach(seg => {
-        if (seg.name === "Swim") hasSwim = true;
-        if (seg.name === "Bike") hasBike = true;
-        if (seg.name === "Run") hasRun = true;
-      });
+    athletes.forEach((athlete, index) => {
+      const idx = index + 1;
+      // If not set, default to visible
+      if (typeof athleteVisibility[idx] === 'undefined') athleteVisibility[idx] = true;
       athleteKeyDiv.innerHTML +=
-        `<div class="key-row">
-           <span class="color-box" style="background:${athlete.color}"></span>
-           <span>${athlete.name}</span>
-           <span class="segment-icons">
-             ${hasSwim ? "🏊" : ""}
-             ${hasBike ? "🚴" : ""}
-             ${hasRun  ? "🏃" : ""}
-           </span>
-         </div>`;
-    }
+        `<div class="key-row${athleteVisibility[idx] ? ' visible' : ''}" data-athlete-idx="${idx}">
+            <input type="checkbox" class="ath-toggle" id="athlete_toggle_${idx}" ${athleteVisibility[idx] ? 'checked' : ''} title="Show/hide athlete" tabindex="0" />
+            <span class="color-box" style="background:${athlete.color}"></span>
+            <span>${athlete.name}</span>
+        </div>`;
+    });
     athleteKeyDiv.style.display = 'block';
+    // Add event listeners for toggles
+    athletes.forEach((athlete, index) => {
+      const idx = index + 1;
+      const toggle = document.getElementById(`athlete_toggle_${idx}`);
+      if (toggle) {
+        toggle.addEventListener('input', () => {
+          athleteVisibility[idx] = toggle.checked;
+          updateMarkerVisibility();
+          renderAthleteKey(athletes); // re-render for updated highlight
+        });
+      }
+    });
+  }
+
+  // Show/hide markers according to toggles
+  function updateMarkerVisibility() {
+    athletes.forEach((athlete, index) => {
+      const idx = index + 1;
+      if (athlete.marker && typeof athlete.marker.setOpacity === "function") {
+        athlete.marker.setOpacity(athleteVisibility[idx] ? 1 : 0);
+      }
+    });
   }
 
   function updateMarkers(currentTime) {
-    for (let athlete of athletes) {
+    athletes.forEach((athlete, index) => {
+      const idx = index + 1;
       const marker = athlete.marker;
-      if (!marker || typeof marker.setLatLng !== "function" || typeof marker.setOpacity !== "function") continue;
+      if (!marker || typeof marker.setLatLng !== "function" || typeof marker.setOpacity !== "function") return;
+      if (!athleteVisibility[idx]) {
+        marker.setOpacity(0);
+        return;
+      }
       if (currentTime < athlete.startTime) {
         marker.setOpacity(0);
-        continue;
+        return;
       }
-      if (marker.options.opacity === 0 || marker.options.opacity === 0.0) marker.setOpacity(1);
+      marker.setOpacity(1);
       let found = false;
       for (let i = 0; i < athlete.segments.length; ++i) {
         const seg = athlete.segments[i];
@@ -448,7 +515,7 @@
         const lastSeg = athlete.segments[athlete.segments.length-1];
         marker.setLatLng([lastSeg.points[lastSeg.points.length-1].lat, lastSeg.points[lastSeg.points.length-1].lng]);
       }
-    }
+    });
     timeDisplay.textContent = formatTime(currentTime);
   }
 
@@ -685,6 +752,11 @@
         const bounds = L.latLngBounds(allCoords);
         map.fitBounds(bounds.pad(0.1));
       }
+
+      // Set all visible on load
+      athleteVisibility = {};
+      athletes.forEach((a, i) => athleteVisibility[i + 1] = true);
+
       updateMarkers(0);
       renderAthleteKey(athletes);
       errorDiv.textContent = '';
@@ -712,6 +784,7 @@
       if (layer instanceof L.Marker) map.removeLayer(layer);
     });
     athletes = [];
+    athleteVisibility = {};
     athleteKeyDiv.innerHTML = '';
     athleteKeyDiv.style.display = 'none';
 
