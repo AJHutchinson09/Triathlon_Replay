@@ -4,7 +4,6 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Triathlon Race Replay</title>
-  <!-- Modern Google Font -->
   <link href="https://fonts.googleapis.com/css?family=Inter:400,600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
@@ -245,7 +244,9 @@
     <div class="left-panel">
       <div class="card">
         <div id="controls">
+          <button id="jumpBackBtn" type="button" title="Jump Back 30s">&#8678; 30s</button>
           <button id="playPauseBtn" disabled>Play</button>
+          <button id="jumpForwardBtn" type="button" title="Jump Forward 30s">30s &#8680;</button>
           <label for="speedSelect" style="margin-left:1em;">Speed</label>
           <select id="speedSelect">
             <option value="1">1x</option>
@@ -278,6 +279,8 @@
   const loadBtn = document.getElementById('loadBtn');
   const resetBtn = document.getElementById('resetBtn');
   const playPauseBtn = document.getElementById('playPauseBtn');
+  const jumpBackBtn = document.getElementById('jumpBackBtn');
+  const jumpForwardBtn = document.getElementById('jumpForwardBtn');
   const timeSlider = document.getElementById('timeSlider');
   const timeDisplay = document.getElementById('timeDisplay');
   const errorDiv = document.getElementById('error');
@@ -454,6 +457,22 @@
         timerId = null;
       }
     }
+  });
+
+  jumpBackBtn.addEventListener('click', () => {
+    if (!athletes.length) return;
+    let t = Number(timeSlider.value) - 30;
+    if (t < Number(timeSlider.min)) t = Number(timeSlider.min);
+    timeSlider.value = t;
+    updateMarkers(t);
+  });
+
+  jumpForwardBtn.addEventListener('click', () => {
+    if (!athletes.length) return;
+    let t = Number(timeSlider.value) + 30;
+    if (t > Number(timeSlider.max)) t = Number(timeSlider.max);
+    timeSlider.value = t;
+    updateMarkers(t);
   });
 
   function fixGpxHeader(gpxText) {
