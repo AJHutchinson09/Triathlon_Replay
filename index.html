@@ -4,48 +4,26 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Triathlon Race Replay</title>
+  <!-- Modern Google Font -->
+  <link href="https://fonts.googleapis.com/css?family=Inter:400,600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
-    body { font: 16px/1.4 sans-serif; margin: 10px; }
-    #inputs .athlete-input { margin: 0.5em 0; }
-    #map { width: 100%; height: 900px; margin: 0; background: #eee; position: relative; min-width: 400px;}
-    #controls { margin: 0.5em 0; }
-    #controls button, #controls input[type=range] { vertical-align: middle; }
-    #timeDisplay { margin-left: 0.5em; font-family: monospace; }
-    .color-label { margin-left: 8px; margin-right: 2px;}
-    .name-label { margin-left: 8px; margin-right: 2px;}
-    .athlete-input input[type="text"] { width: 110px; }
-    #version { margin-top: 0.5em; color: #888; font-size: 0.9em; }
-    .error-message { color: #b00; margin: 1em 0; font-weight: bold; white-space: pre-wrap; }
-    #athleteKey {
-      position: absolute;
-      top: 30px;
-      left: 40px;
-      z-index: 1000;
-      background: rgba(255,255,255,0.95);
-      border-radius: 8px;
-      box-shadow: 0 2px 8px #0002;
-      padding: 10px 16px;
-      font-size: 1em;
-      min-width: 140px;
-      max-width: 240px;
-      pointer-events: none;
+    body {
+      background: #f3f6fa;
+      font-family: 'Inter', Arial, sans-serif;
+      margin: 0;
+      padding: 0;
     }
-    #athleteKey .key-row {
-      display: flex;
-      align-items: center;
-      margin-bottom: 6px;
+    h1 {
+      font-weight: 600;
+      letter-spacing: -1px;
+      margin: 0 0 0.2em 0;
     }
-    #athleteKey .color-box {
-      width: 20px;
-      height: 20px;
-      border-radius: 4px;
-      border: 1.5px solid #777;
-      margin-right: 10px;
-      flex-shrink: 0;
+    .container {
+      max-width: 1250px;
+      margin: 32px auto 0 auto;
+      padding: 0 12px;
     }
-    #athleteKey strong { display: block; margin-bottom: 6px; }
-    /* Flex layout for controls/map */
     .main-flex {
       display: flex;
       flex-direction: row;
@@ -56,48 +34,224 @@
       flex: 1 1 320px;
       max-width: 360px;
       min-width: 220px;
+      display: flex;
+      flex-direction: column;
+      gap: 1.5em;
     }
     .right-panel {
       flex: 4 1 600px;
       min-width: 400px;
     }
+    .card {
+      background: #fff;
+      border-radius: 16px;
+      box-shadow: 0 6px 24px rgba(0,0,0,0.07);
+      padding: 2em 1.5em;
+      margin-bottom: 0.5em;
+    }
+    #inputs .athlete-input {
+      margin: 0.7em 0;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.6em;
+      padding-bottom: 0.4em;
+    }
+    #inputs .athlete-input strong {
+      min-width: 90px;
+      font-size: 1.02em;
+      font-weight: 600;
+      color: #1e293b;
+    }
+    .color-label, .name-label {
+      margin-left: 5px;
+      margin-right: 2px;
+    }
+    .athlete-input input[type="text"] {
+      width: 110px;
+    }
+    button {
+      background: #2563eb;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 0.6em 1.3em;
+      font-size: 1em;
+      margin-right: 0.7em;
+      margin-bottom: 0.3em;
+      cursor: pointer;
+      font-family: inherit;
+      font-weight: 600;
+      transition: background 0.17s, box-shadow 0.17s;
+      box-shadow: 0 1px 3px 0 rgba(60, 60, 60, 0.07);
+    }
+    button:disabled {
+      background: #bdbdbd;
+      color: #fff;
+      cursor: not-allowed;
+      box-shadow: none;
+    }
+    button:hover:not(:disabled) {
+      background: #1746a0;
+    }
+    input[type="text"] {
+      border: 1px solid #d0d7de;
+      border-radius: 5px;
+      padding: 0.34em 0.55em;
+      font-size: 1em;
+      font-family: inherit;
+      outline: none;
+      background: #f8fafc;
+      transition: border 0.16s;
+    }
+    input[type="text"]:focus {
+      border: 1.5px solid #2563eb;
+    }
+    input[type="color"] {
+      border: none;
+      background: none;
+      width: 2em;
+      height: 2em;
+      vertical-align: middle;
+      border-radius: 6px;
+      box-shadow: 0 1px 3px #cbd5e1;
+      margin: 0 2px;
+    }
+    select, input[type="range"] {
+      border-radius: 6px;
+      border: 1px solid #d0d7de;
+      padding: 0.2em 0.6em;
+      margin-left: 0.3em;
+      font-size: 1em;
+      background: #f8fafc;
+      font-family: inherit;
+    }
+    #controls {
+      background: #f9fafb;
+      border-radius: 12px;
+      padding: 1.2em 1em 1em 1em;
+      margin: 0.5em 0 0.5em 0;
+      box-shadow: 0 1px 4px rgba(30, 41, 59, 0.07);
+    }
+    #controls button, #controls input[type=range] { vertical-align: middle; }
+    #timeDisplay {
+      margin-left: 0.8em;
+      font-family: 'Inter', 'Menlo', 'monospace', monospace;
+      font-weight: 600;
+      color: #334155;
+      background: #f1f5f9;
+      padding: 2px 8px;
+      border-radius: 5px;
+      font-size: 1.07em;
+    }
+    #version {
+      margin-top: 1.2em;
+      color: #8b949e;
+      font-size: 0.95em;
+      text-align: right;
+    }
+    .error-message {
+      color: #b00;
+      font-weight: bold;
+      white-space: pre-wrap;
+      background: #fff1f2;
+      border-radius: 7px;
+      margin: 1em 0 0.7em 0;
+      padding: 0.7em 1em;
+      border: 1px solid #fecaca;
+      font-size: 1em;
+      box-sizing: border-box;
+    }
+    #map {
+      width: 100%;
+      height: 800px;
+      margin: 0;
+      background: #e5e7eb;
+      position: relative;
+      min-width: 320px;
+      box-shadow: 0 4px 18px rgba(0,0,0,0.12);
+      border-radius: 16px;
+      border: 1px solid #e1e7ed;
+      transition: box-shadow 0.2s;
+    }
+    #athleteKey {
+      position: absolute;
+      top: 30px;
+      left: 40px;
+      z-index: 1000;
+      background: rgba(255,255,255,0.96);
+      border-radius: 10px;
+      box-shadow: 0 2px 8px #0002;
+      padding: 12px 20px;
+      font-size: 1.07em;
+      min-width: 140px;
+      max-width: 220px;
+      pointer-events: none;
+      border: 1px solid #e5e7eb;
+    }
+    #athleteKey .key-row {
+      display: flex;
+      align-items: center;
+      margin-bottom: 7px;
+    }
+    #athleteKey .color-box {
+      width: 22px;
+      height: 22px;
+      border-radius: 5px;
+      border: 2px solid #64748b;
+      margin-right: 12px;
+      flex-shrink: 0;
+      box-shadow: 0 1px 3px #cbd5e1;
+    }
+    #athleteKey strong { display: block; margin-bottom: 8px; font-weight: 600; color: #1e293b;}
+    label { font-weight: 500; color: #1e293b; }
     @media (max-width: 900px) {
-      .main-flex { flex-direction: column; }
-      .right-panel { min-width: 300px; }
+      .main-flex { flex-direction: column; gap: 1em; }
+      .right-panel { min-width: 0; }
+      #map { height: 340px; min-width: 0; }
+    }
+    @media (max-width: 600px) {
+      .container { padding: 0 3px; }
+      #map { height: 220px; }
+      .card, #controls { padding: 1em 0.3em; }
     }
   </style>
 </head>
 <body>
-
-<h1>Triathlon Race Replay</h1>
-<p>Upload each athlete's GPX files (Swim optional, Bike and Run required):</p>
-<div id="inputs"></div>
-<button id="addAthleteBtn" type="button">Add Athlete</button>
-<button id="loadBtn">Load and Prepare</button>
-<button id="resetBtn" type="button">Reset</button>
-
-<div class="main-flex">
-  <div class="left-panel">
-    <div id="controls">
-      <button id="playPauseBtn" disabled>Play</button>
-      <label for="speedSelect" style="margin-left:1em;">Speed</label>
-      <select id="speedSelect">
-        <option value="1">1x</option>
-        <option value="30">30x</option>
-        <option value="60">60x</option>
-        <option value="120">120x</option>
-        <option value="180">180x</option>
-        <option value="240">240x</option>
-      </select>
-      <input type="range" id="timeSlider" min="0" value="0" disabled />
-      <span id="timeDisplay">0:00:00</span>
-    </div>
-    <div id="version">Version 1.3</div>
-    <div id="error" class="error-message"></div>
+<div class="container">
+  <h1>Triathlon Race Replay</h1>
+  <p style="margin-bottom: 1.2em; color: #334155;">Upload each athlete's GPX files (<b>Swim</b> optional, <b>Bike and Run</b> required):</p>
+  <div class="card" style="margin-bottom: 2.2em;">
+    <div id="inputs"></div>
+    <button id="addAthleteBtn" type="button">Add Athlete</button>
+    <button id="loadBtn">Load and Prepare</button>
+    <button id="resetBtn" type="button" style="background:#e11d48;">Reset</button>
   </div>
-  <div class="right-panel">
-    <div id="map" style="position:relative;">
-      <div id="athleteKey"></div>
+  <div class="main-flex">
+    <div class="left-panel">
+      <div class="card">
+        <div id="controls">
+          <button id="playPauseBtn" disabled>Play</button>
+          <label for="speedSelect" style="margin-left:1em;">Speed</label>
+          <select id="speedSelect">
+            <option value="1">1x</option>
+            <option value="30">30x</option>
+            <option value="60">60x</option>
+            <option value="120">120x</option>
+            <option value="180">180x</option>
+            <option value="240">240x</option>
+          </select>
+          <input type="range" id="timeSlider" min="0" value="0" disabled />
+          <span id="timeDisplay">0:00:00</span>
+        </div>
+        <div id="version">Version 1.3</div>
+        <div id="error" class="error-message" style="display:none;"></div>
+      </div>
+    </div>
+    <div class="right-panel">
+      <div id="map" style="position:relative;">
+        <div id="athleteKey"></div>
+      </div>
     </div>
   </div>
 </div>
@@ -117,7 +271,7 @@
   const athleteKeyDiv = document.getElementById('athleteKey');
   let athleteCount = 0;
   const maxAthletes = 5;
-  const defaultColors = ["#ff0000", "#0000ff", "#008000", "#ffa500", "#800080"];
+  const defaultColors = ["#ff0000", "#2563eb", "#22c55e", "#f59e42", "#a21caf"];
   let athletes = [];
   let globalStartSec = 0;
   let globalEndSec = 0;
@@ -192,9 +346,9 @@
   function createColoredMarker(lat, lng, color) {
     const icon = L.divIcon({
       className: '',
-      html: `<svg width="20" height="20"><circle cx="10" cy="10" r="8" fill="${color}" stroke="#222" stroke-width="2"/></svg>`,
-      iconSize: [20, 20],
-      iconAnchor: [10, 10]
+      html: `<svg width="22" height="22"><circle cx="11" cy="11" r="9" fill="${color}" stroke="#222" stroke-width="2"/></svg>`,
+      iconSize: [22, 22],
+      iconAnchor: [11, 11]
     });
     return L.marker([lat, lng], {icon});
   }
@@ -332,6 +486,7 @@
   }
 
   loadBtn.addEventListener('click', async () => {
+    errorDiv.style.display = 'none';
     errorDiv.textContent = '';
     let athletesToLoad = [];
     for (let i = 1; i <= athleteCount; i++) {
@@ -343,6 +498,7 @@
     }
     if (athletesToLoad.length === 0) {
       errorDiv.textContent = "Please select at least bike and run GPX files for at least one athlete.";
+      errorDiv.style.display = '';
       return;
     }
 
@@ -383,12 +539,14 @@
           }
         } catch (err) {
           errorDiv.textContent += `\n${err.message} (Skipping swim for ${name})`;
+          errorDiv.style.display = '';
         }
         try {
           bikeSeg = parseSegment(bikeText, "Bike", name);
           athlete.segments.push(bikeSeg);
         } catch (err) {
           errorDiv.textContent += `\n${err.message}`;
+          errorDiv.style.display = '';
           continue;
         }
         try {
@@ -396,6 +554,7 @@
           athlete.segments.push(runSeg);
         } catch (err) {
           errorDiv.textContent += `\n${err.message}`;
+          errorDiv.style.display = '';
           continue;
         }
 
@@ -415,6 +574,7 @@
           marker.setOpacity(1);
         } catch (merr) {
           errorDiv.textContent += `\nFailed to create marker for ${name}: ${merr.message}`;
+          errorDiv.style.display = '';
           continue;
         }
         athlete.marker = marker;
@@ -425,6 +585,7 @@
 
       if (!athletes.length) {
         errorDiv.textContent = errorDiv.textContent || "Failed to load any athletes' GPX data. Please check your files.";
+        errorDiv.style.display = '';
         return;
       }
 
@@ -460,9 +621,11 @@
       updateMarkers(0);
       renderAthleteKey(athletes);
       errorDiv.textContent = '';
+      errorDiv.style.display = 'none';
       alert("Files loaded! Use Play/Pause and the slider to replay the race.");
     } catch (err) {
       errorDiv.textContent = "Unexpected error: " + err.message;
+      errorDiv.style.display = '';
     }
   });
 
@@ -476,6 +639,7 @@
     timeSlider.value = "0";
     timeSlider.disabled = true;
     errorDiv.textContent = '';
+    errorDiv.style.display = 'none';
     timeDisplay.textContent = '0:00:00';
 
     // Remove markers from map
