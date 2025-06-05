@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Triathlon Race Replay</title>
+  <title>Race Replay</title>
   <link href="https://fonts.googleapis.com/css?family=Inter:400,600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
@@ -306,10 +306,11 @@
 </head>
 <body>
 <div class="container">
-  <h1>Triathlon Race Replay</h1>
-  <p style="margin-bottom: 1.2em; color: #334155;">Upload each athlete's GPX files (<b>Swim</b> optional, <b>Bike and Run</b> required):</p>
+  <h1>Race Replay</h1>
+  <p style="margin-bottom: 1.2em; color: #334155;">Upload each athlete's GPX files (<b>Swim</b>, <b>Bike</b>, and/or <b>Run</b>; at least one required):</p>
   <p style="margin-top: -0.7em; margin-bottom: 1.6em; color: #475569; font-style: italic;">
-    Hint: Swim GPS data is often messy, if the results are unsatisfactory only upload the bike and run
+    Hint: Simply upload the files that you want to show! Uploading only bikes, or runs, will work just as well as uploading all three!<br>
+    Tri hint: Swim GPS data is often messy, if the results are unsatisfactory only upload the bike and run
   </p>
   <div class="card" style="margin-bottom: 2.2em;">
     <div id="inputs"></div>
@@ -599,7 +600,7 @@
     return gpxText.replace(
       /<gpx[\s\S]*?>/,
       `<gpx version="1.1"
-        creator="TriathlonReplay"
+        creator="RaceReplay"
         xmlns="http://www.topografix.com/GPX/1/1"
         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
         xmlns:gpxtpx="http://www.garmin.com/xmlschemas/TrackPointExtension/v1"
@@ -645,14 +646,19 @@
     errorDiv.textContent = '';
     let athletesToLoad = [];
     for (let i = 1; i <= athleteCount; i++) {
+      const swimInput = document.getElementById(`athlete${i}_swim`);
       const bikeInput = document.getElementById(`athlete${i}_bike`);
       const runInput  = document.getElementById(`athlete${i}_run`);
-      if (bikeInput && bikeInput.files.length && runInput && runInput.files.length) {
+      if (
+        (swimInput && swimInput.files.length) ||
+        (bikeInput && bikeInput.files.length) ||
+        (runInput && runInput.files.length)
+      ) {
         athletesToLoad.push(i);
       }
     }
     if (athletesToLoad.length === 0) {
-      errorDiv.textContent = "Please select at least bike and run GPX files for at least one athlete.";
+      errorDiv.textContent = "Please select at least one GPX file (swim, bike, or run) for at least one athlete.";
       errorDiv.style.display = '';
       return;
     }
@@ -682,33 +688,48 @@
         if (swimInput && swimInput.files.length) {
           swimText = await swimInput.files[0].text();
         }
-        bikeText = await bikeInput.files[0].text();
-        runText  = await runInput.files[0].text();
+        if (bikeInput && bikeInput.files.length) {
+          bikeText = await bikeInput.files[0].text();
+        }
+        if (runInput && runInput.files.length) {
+          runText  = await runInput.files[0].text();
+        }
 
         const athlete = { name, color, segments: [], marker: null, startTime: 0, endTime: 0 };
+        let validSegment = false;
 
         try {
           if (swimText) {
             swimSeg = parseSegment(swimText, "Swim", name);
             athlete.segments.push(swimSeg);
+            validSegment = true;
           }
         } catch (err) {
           errorDiv.textContent += `\n${err.message} (Skipping swim for ${name})`;
           errorDiv.style.display = '';
         }
         try {
-          bikeSeg = parseSegment(bikeText, "Bike", name);
-          athlete.segments.push(bikeSeg);
+          if (bikeText) {
+            bikeSeg = parseSegment(bikeText, "Bike", name);
+            athlete.segments.push(bikeSeg);
+            validSegment = true;
+          }
         } catch (err) {
-          errorDiv.textContent += `\n${err.message}`;
+          errorDiv.textContent += `\n${err.message} (Skipping bike for ${name})`;
           errorDiv.style.display = '';
-          continue;
         }
         try {
-          runSeg = parseSegment(runText, "Run", name);
-          athlete.segments.push(runSeg);
+          if (runText) {
+            runSeg = parseSegment(runText, "Run", name);
+            athlete.segments.push(runSeg);
+            validSegment = true;
+          }
         } catch (err) {
-          errorDiv.textContent += `\n${err.message}`;
+          errorDiv.textContent += `\n${err.message} (Skipping run for ${name})`;
+          errorDiv.style.display = '';
+        }
+        if (!validSegment) {
+          errorDiv.textContent += `\nNo valid segments found for ${name}.`;
           errorDiv.style.display = '';
           continue;
         }
@@ -721,8 +742,9 @@
         if (athlete.startTime < globalStartSec) globalStartSec = athlete.startTime;
         if (athlete.endTime > globalEndSec) globalEndSec = athlete.endTime;
 
-        const startLat = swimSeg?.points?.[0]?.lat ?? bikeSeg.points[0].lat;
-        const startLng = swimSeg?.points?.[0]?.lng ?? bikeSeg.points[0].lng;
+        const firstSeg = athlete.segments[0];
+        const startLat = firstSeg.points[0].lat;
+        const startLng = firstSeg.points[0].lng;
         let marker = null;
         try {
           marker = createColoredMarker(startLat, startLng, color).addTo(map);
