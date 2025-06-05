@@ -101,6 +101,10 @@
       margin-right: 0.4em;
       min-width: 60px;
     }
+    /* Play/Pause button fixed width so it does not resize */
+    #playPauseBtn {
+      width: 70px;
+    }
     .jump-btns-row {
       display: flex;
       justify-content: center;
@@ -157,7 +161,6 @@
       justify-content: flex-start;
     }
     #controls-row2 {
-      /* -- The key fix for slider fit -- */
       flex-wrap: nowrap;
       gap: 0.6em;
     }
@@ -170,9 +173,10 @@
       display: block;
       box-sizing: border-box;
     }
+    /* Timer display fixed width and monospace font */
     #timeDisplay {
       margin-left: 0;
-      font-family: 'Inter', 'Menlo', 'monospace', monospace;
+      font-family: 'Menlo', 'monospace', monospace;
       font-weight: 600;
       color: #334155;
       background: #f1f5f9;
@@ -181,6 +185,9 @@
       font-size: 1.07em;
       white-space: nowrap;
       flex-shrink: 0;
+      width: 7ch;
+      text-align: right;
+      display: inline-block;
     }
     #version {
       margin-top: 1.2em;
@@ -359,16 +366,8 @@
   let athleteCount = 0;
   const maxAthletes = 10;
   const defaultColors = [
-    "#e6194b", // Red
-    "#3cb44b", // Green
-    "#ffe119", // Yellow
-    "#4363d8", // Blue
-    "#f58231", // Orange
-    "#911eb4", // Purple
-    "#46f0f0", // Cyan
-    "#f032e6", // Magenta
-    "#bcf60c", // Lime
-    "#fabebe"  // Pink
+    "#e6194b", "#3cb44b", "#ffe119", "#4363d8", "#f58231",
+    "#911eb4", "#46f0f0", "#f032e6", "#bcf60c", "#fabebe"
   ];
   let athletes = [];
   let globalStartSec = 0;
