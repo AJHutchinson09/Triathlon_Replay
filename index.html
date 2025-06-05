@@ -101,9 +101,14 @@
       margin-right: 0.4em;
       min-width: 60px;
     }
-    /* Play/Pause button fixed width so it does not resize */
+    /* Play/Pause button: fixed width and flexbox centering */
     #playPauseBtn {
       width: 70px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0.6em 0;
+      text-align: center;
     }
     .jump-btns-row {
       display: flex;
@@ -585,7 +590,7 @@
   jumpForwardBtn.addEventListener('click', () => {
     if (!athletes.length) return;
     let t = Number(timeSlider.value) + 30;
-    if (t > Number(timeSlider.max)) t = Number(timeSlider.max);
+    if (t > Number(timeSlider.max)) t = Number(timeSlider.max;
     timeSlider.value = t;
     updateMarkers(t);
   });
