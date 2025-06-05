@@ -590,7 +590,7 @@
   jumpForwardBtn.addEventListener('click', () => {
     if (!athletes.length) return;
     let t = Number(timeSlider.value) + 30;
-    if (t > Number(timeSlider.max)) t = Number(timeSlider.max;
+    if (t > Number(timeSlider.max)) t = Number(timeSlider.max);
     timeSlider.value = t;
     updateMarkers(t);
   });
