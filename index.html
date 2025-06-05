@@ -205,6 +205,17 @@
     }
     #athleteKey strong { display: block; margin-bottom: 8px; font-weight: 600; color: #1e293b;}
     label { font-weight: 500; color: #1e293b; }
+    /* --- UI Fix for upload buttons row --- */
+    .uploads-row {
+      display: flex;
+      flex-wrap: nowrap;
+      gap: 0.4em;
+      align-items: center;
+      white-space: nowrap;
+    }
+    .uploads-row input[type="file"] {
+      margin-right: 0.6em;
+    }
     @media (max-width: 900px) {
       .main-flex { flex-direction: column; gap: 1em; }
       .right-panel { min-width: 0; }
@@ -289,9 +300,11 @@
       <input type="text" id="athlete${athleteCount}_name" value="Athlete ${athleteCount}" placeholder="Name" />
       <label class="color-label">Color</label>
       <input type="color" id="athlete${athleteCount}_color" value="${defaultColors[athleteCount-1] || '#000000'}" />
-      Swim <input type="file" id="athlete${athleteCount}_swim" accept=".gpx" />
-      Bike <input type="file" id="athlete${athleteCount}_bike" accept=".gpx" />
-      Run <input type="file" id="athlete${athleteCount}_run" accept=".gpx" />
+      <span class="uploads-row">
+        Swim <input type="file" id="athlete${athleteCount}_swim" accept=".gpx" />
+        Bike <input type="file" id="athlete${athleteCount}_bike" accept=".gpx" />
+        Run <input type="file" id="athlete${athleteCount}_run" accept=".gpx" />
+      </span>
     `;
     inputsDiv.appendChild(div);
     if (athleteCount === maxAthletes) addAthleteBtn.disabled = true;
